@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Context · 英语阅读助手",
+  "description": "指向英文单词，轻按左 Ctrl，在原文旁查看语境释义。",
+  "version": "1.0.0",
+  "minimum_chrome_version": "120",
+  "permissions": ["storage", "contextMenus"],
+  "host_permissions": ["https://api.openai.com/*"],
+  "background": { "service_worker": "js/worker.js" },
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "js": ["js/content.js"],
+    "run_at": "document_idle",
+    "all_frames": false
+  }],
+  "action": {
+    "default_title": "Context · 阅读开关",
+    "default_popup": "popup.html"
+  },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" }
+}

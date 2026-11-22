@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>阅读设置 · Context</title><link rel="icon" href="icons/32.png"><link rel="stylesheet" href="ui.css">
+<script defer src="js/options.js"></script></head>
+<body class="options">
+<header class="mast"><div class="brand"><img src="icons/48.png" width="32" height="32" alt="">Context</div></header>
+<main class="settings-layout">
+  <section class="configuration" aria-labelledby="heading">
+    <h1 id="heading">阅读设置</h1>
+    <p class="lead">连接你的 OpenAI 项目，在英文原文旁查看释义。</p>
+    <form id="prefs">
+      <div class="field"><label for="api-key" lang="en">OpenAI API Key</label>
+        <input type="password" id="api-key" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="输入个人 API Key" aria-describedby="key-state">
+        <div class="field-foot"><span id="key-state">正在读取…</span><button type="button" class="text-btn" id="forget" hidden>移除密钥</button></div>
+      </div>
+      <div class="field"><label for="model">模型名称</label>
+        <input id="model" required maxlength="128" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="model-help">
+        <p id="model-help" class="help">使用你的项目有权访问、支持 Responses API 结构化输出的模型。</p>
+      </div>
+      <div class="form-end"><button class="primary" id="save" type="submit">保存设置</button><span id="feedback" class="feedback" role="status"></span></div>
+    </form>
+    <section class="privacy"><h2>密钥与阅读数据</h2>
+      <p>密钥保存在当前浏览器配置文件中，仅扩展可信页面和后台可读取，不会同步。它没有独立加密；能读取本机配置文件的人仍可能取得密钥。</p>
+      <p>主动查词时，扩展将所选词句、邻近文字和普通网页标题发送到 OpenAI 官方接口，费用计入你的 API 项目。释义在本地最多缓存 300 条，保留 7 天。</p>
+    </section>
+  </section>
+  <aside class="guide"><h2>在网页上查词</h2>
+    <blockquote lang="en">My <mark>pitch</mark> isn’t working on the fundraising side.</blockquote>
+    <p>把鼠标指向想读懂的词，轻按并松开 <kbd>左 Ctrl</kbd>，即可查看它在这句话里的意思。</p>
+    <p>遇到短语时，先选中文字，再从右键菜单选择「用 Context 解释」。</p>
+  </aside>
+</main></body></html>

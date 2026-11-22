@@ -1,0 +1,23 @@
+{
+  "name": "context-edge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "在英文原文旁解释词义的 Edge 扩展",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "npm run build && playwright test",
+    "check": "npm run typecheck && npm test && npm run test:e2e"
+  },
+  "engines": { "node": ">=22.12.0" },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/chrome": "0.3.7",
+    "@types/node": "^22.15.0",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
