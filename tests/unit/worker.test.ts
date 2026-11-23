@@ -45,6 +45,55 @@ describe('structured output', () => {
     } finally { clock.mockRestore(); }
   });
 });
+describe('streaming explanations', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const delta = (text: string) => ({ type: 'response.output_text.delta', delta: text });
+  const completed = (value: Explanation) => ({ type: 'response.completed', response: {
+    status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(value) }] }]
+  } });
+  function serve(events: unknown[]) {
+    const data = ': keepalive\r\n\r\n' + events.map(event => 'data: ' +
+      (typeof event === 'string' ? event : JSON.stringify(event)) + '\r\n\r\n').join('');
+    const bytes = new TextEncoder().encode(data);
+    const body = new ReadableStream({ start(controller) {
+      for (let i = 0; i < bytes.length; i += 7) controller.enqueue(bytes.slice(i, i + 7));
+      controller.close();
+    } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8' } })));
+  }
+  it('emits each whole line once across escaped quotes, split UTF-8 and SSE frames', async () => {
+    const value = { ...ex, meaning_en: 'Earn the chance to say "yes", in public.' };
+    const { meaning_zh, note_en, ...first } = value;
+    const english = JSON.stringify(first).slice(0, -1);
+    const chinese = ',"meaning_zh":' + JSON.stringify(meaning_zh);
+    const split = english.indexOf('\\"') + 2;
+    serve([delta(english.slice(0, split)), delta(english.slice(split)), delta(chinese.slice(0, -2)),
+      delta(chinese.slice(-2)), delta(',"note_en":' + JSON.stringify(note_en) + '}'), completed(value)]);
+    const preview = vi.fn();
+    await expect(explain(r, 'fixture', 'test', new AbortController().signal, preview)).resolves.toEqual(value);
+    expect(preview.mock.calls.map(([p]) => p)).toEqual([
+      { target: ex.target, meaning_en: value.meaning_en, meaning_zh: '' },
+      { target: ex.target, meaning_en: value.meaning_en, meaning_zh }
+    ]);
+  });
+  it('validates the exact occurrence before sending a preview or accepting the final answer', async () => {
+    const wrong = { ...ex, target: 'Turn right' };
+    serve([delta(JSON.stringify(wrong)), completed(wrong)]);
+    const preview = vi.fn();
+    await expect(explain(r, 'fixture', 'test', new AbortController().signal, preview)).rejects.toThrow('target');
+    expect(preview).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['EOF', [], 'incomplete'], ['sentinel', ['[DONE]'], 'incomplete'],
+    ['incomplete', [{ type: 'response.incomplete' }], 'incomplete'],
+    ['refusal', [{ type: 'response.refusal.delta', delta: 'No' }], 'refusal'],
+    ['failed', [{ type: 'response.failed' }], 'service'], ['error', [{ type: 'error' }], 'service'],
+    ['bad event', ['{'], 'invalid'], ['invalid final', [completed({ ...ex, meaning_zh: '' })], 'invalid']
+  ] as const)('rejects %s even after valid text deltas', async (_name, ending, code) => {
+    serve([delta(JSON.stringify(ex)), ...ending]);
+    await expect(explain(r, 'fixture', 'test', new AbortController().signal, vi.fn())).rejects.toThrow(code);
+  });
+});
 describe('context cache', () => {
   function memory() {
     let data = {};

@@ -43,7 +43,9 @@ async function lookup(tab: number, site: string, id: string, reading: Reading): 
     const cached = await cache.get(key).catch(() => undefined);
     if (signal.aborted) throw new LookupFailure('cancelled');
     if (cached) return { ok: true, explanation: cached };
-    const answer = await explain(reading, prefs.apiKey, model, signal);
+    const answer = await explain(reading, prefs.apiKey, model, signal, explanation => {
+      if (!signal.aborted) void tellTab(tab, { type: 'preview', id, explanation });
+    });
     if (signal.aborted) throw new LookupFailure('cancelled');
     await cache.put(key, answer).catch(() => undefined);
     return { ok: true, explanation: answer };

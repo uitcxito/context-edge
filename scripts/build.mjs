@@ -7,6 +7,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const stage = await mkdtemp(path.join(root, '.build-'));
 try {
   await cp(path.join(root, 'public'), stage, { recursive: true });
+  await cp(path.join(root, 'node_modules/eventsource-parser/LICENSE'), path.join(stage, 'eventsource-parser.LICENSE.txt'));
   await mkdir(path.join(stage, 'js'), { recursive: true });
   await build({
     absWorkingDir: root,

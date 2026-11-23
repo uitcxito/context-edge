@@ -5,7 +5,10 @@ import type { Explanation } from '../../src/shared';
 
 type Input = { selected_text: string; current_sentence: string; previous_context: string; following_context: string;
   selected_start: number; selected_end: number; page_title: string };
-export interface Call { input: Input; model: string; strict: boolean; noStore: boolean; fromWorker: boolean; authorized: boolean }
+export interface Call {
+  input: Input; model: string; strict: boolean; noStore: boolean; fromWorker: boolean; authorized: boolean;
+  stream: boolean; reasoning?: string;
+}
 export function answer(input: Input): Explanation {
   const basic = { status: 'ok' as const, target: input.selected_text, note_en: '',
     meaning_en: 'The meaning of this expression in the passage.', meaning_zh: '这个表达在文中的含义。' };
@@ -36,7 +39,9 @@ function html(body: string, lang: string) {
 export class Reader {
   readonly calls: Call[] = [];
   readonly extension: string;
-  respond = (route: Route, call: Call) => route.fulfill({ json: envelope(answer(call.input)) });
+  respond = (route: Route, call: Call) => route.fulfill({
+    contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ type: 'response.completed', response: envelope(answer(call.input)) }) + '\n\n'
+  });
   constructor(readonly context: BrowserContext, readonly page: Page, readonly worker: Worker) {
     this.extension = worker.url().slice(0, worker.url().indexOf('/js/'));
   }
@@ -48,7 +53,7 @@ export class Reader {
       }
       const body = req.postDataJSON();
       const call: Call = {
-        input: JSON.parse(body.input.at(-1).content), model: body.model,
+        input: JSON.parse(body.input.at(-1).content), model: body.model, stream: body.stream, reasoning: body.reasoning?.effort,
         strict: body.text.format.strict === true && body.text.format.type === 'json_schema' && body.text.format.schema.additionalProperties === false,
         noStore: body.store === false, fromWorker: Boolean(req.serviceWorker()), authorized: req.headers().authorization === 'Bearer context-test-only'
       };

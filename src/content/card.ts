@@ -1,4 +1,4 @@
-import { type ErrorCode, type Reply } from '../shared';
+import { type ErrorCode, type ExplanationPreview, type Reply } from '../shared';
 import { HOST } from './dom';
 import css from './card.css';
 
@@ -23,10 +23,12 @@ export class Card {
   private panel = element('article');
   private title = element('h2');
   private body = element('div');
+  private english = element('p');
+  private chinese = element('p', undefined, 'zh');
   private previousFocus = document.activeElement;
   private resize = new ResizeObserver(() => this.position());
 
-  constructor(private rect: DOMRect, target: string, private retry: () => void, private settings: () => void) {
+  constructor(private rect: DOMRect, private target: string, private retry: () => void, private settings: () => void) {
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(css);
     this.shadow.adoptedStyleSheets = [sheet];
@@ -37,6 +39,7 @@ export class Card {
     this.panel.setAttribute('aria-label', 'Context 词义');
     this.title.textContent = target;
     this.title.lang = 'en';
+    this.english.lang = 'en';
     this.body.setAttribute('aria-live', 'polite');
     this.body.append(element('p', '正在读取语境…', 'status'));
     this.panel.append(this.title, this.body);
@@ -63,10 +66,19 @@ export class Card {
     button.addEventListener('click', e => { if (e.isTrusted) action(); });
     return button;
   }
+  showMeanings({ target, meaning_en, meaning_zh }: ExplanationPreview) {
+    if (this.title.textContent !== target) this.title.textContent = target;
+    if (this.english.textContent !== meaning_en) this.english.textContent = meaning_en;
+    if (!this.english.parentNode) this.body.replaceChildren(this.english);
+    if (meaning_zh && this.chinese.textContent !== meaning_zh) {
+      this.chinese.textContent = meaning_zh;
+      this.body.append(this.chinese);
+    }
+  }
   show(reply: Reply) {
-    this.body.replaceChildren();
     if (!reply.ok) {
-      this.body.append(element('p', messages[reply.error], 'status'));
+      this.title.textContent = this.target;
+      this.body.replaceChildren(element('p', messages[reply.error], 'status'));
       if (['noKey', 'badKey', 'forbidden', 'model', 'settings'].includes(reply.error)) {
         this.body.append(this.button('打开设置', this.settings));
       } else if (['timeout', 'network', 'rate', 'service', 'incomplete', 'invalid', 'target'].includes(reply.error)) {
@@ -74,13 +86,11 @@ export class Card {
       }
     } else {
       const ex = reply.explanation;
-      this.title.textContent = ex.target;
       if (ex.status === 'unclear') {
-        this.body.append(element('p', '这段上下文不足以确定含义。', 'status'));
+        this.title.textContent = ex.target;
+        this.body.replaceChildren(element('p', '这段上下文不足以确定含义。', 'status'));
       } else {
-        const en = element('p', ex.meaning_en);
-        en.lang = 'en';
-        this.body.append(en, element('p', ex.meaning_zh, 'zh'));
+        this.showMeanings(ex);
         if (ex.note_en) {
           const note = element('p', ex.note_en, 'note');
           note.lang = 'en';

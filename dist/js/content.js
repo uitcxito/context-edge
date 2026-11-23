@@ -258,6 +258,7 @@
   var Card = class {
     constructor(rect, target, retry, settings) {
       this.rect = rect;
+      this.target = target;
       this.retry = retry;
       this.settings = settings;
       const sheet = new CSSStyleSheet();
@@ -270,6 +271,7 @@
       this.panel.setAttribute("aria-label", "Context 词义");
       this.title.textContent = target;
       this.title.lang = "en";
+      this.english.lang = "en";
       this.body.setAttribute("aria-live", "polite");
       this.body.append(element("p", "正在读取语境…", "status"));
       this.panel.append(this.title, this.body);
@@ -281,6 +283,7 @@
       this.resize.observe(this.panel);
     }
     rect;
+    target;
     retry;
     settings;
     host = document.createElement(HOST);
@@ -288,6 +291,8 @@
     panel = element("article");
     title = element("h2");
     body = element("div");
+    english = element("p");
+    chinese = element("p", void 0, "zh");
     previousFocus = document.activeElement;
     resize = new ResizeObserver(() => this.position());
     position() {
@@ -308,10 +313,19 @@
       });
       return button;
     }
+    showMeanings({ target, meaning_en, meaning_zh }) {
+      if (this.title.textContent !== target) this.title.textContent = target;
+      if (this.english.textContent !== meaning_en) this.english.textContent = meaning_en;
+      if (!this.english.parentNode) this.body.replaceChildren(this.english);
+      if (meaning_zh && this.chinese.textContent !== meaning_zh) {
+        this.chinese.textContent = meaning_zh;
+        this.body.append(this.chinese);
+      }
+    }
     show(reply) {
-      this.body.replaceChildren();
       if (!reply.ok) {
-        this.body.append(element("p", messages[reply.error], "status"));
+        this.title.textContent = this.target;
+        this.body.replaceChildren(element("p", messages[reply.error], "status"));
         if (["noKey", "badKey", "forbidden", "model", "settings"].includes(reply.error)) {
           this.body.append(this.button("打开设置", this.settings));
         } else if (["timeout", "network", "rate", "service", "incomplete", "invalid", "target"].includes(reply.error)) {
@@ -319,13 +333,11 @@
         }
       } else {
         const ex = reply.explanation;
-        this.title.textContent = ex.target;
         if (ex.status === "unclear") {
-          this.body.append(element("p", "这段上下文不足以确定含义。", "status"));
+          this.title.textContent = ex.target;
+          this.body.replaceChildren(element("p", "这段上下文不足以确定含义。", "status"));
         } else {
-          const en = element("p", ex.meaning_en);
-          en.lang = "en";
-          this.body.append(en, element("p", ex.meaning_zh, "zh"));
+          this.showMeanings(ex);
           if (ex.note_en) {
             const note = element("p", ex.note_en, "note");
             note.lang = "en";
@@ -424,16 +436,15 @@
       if (location.href !== page || !anchor.root.isConnected || anchor.range.collapsed || !anchor.root.contains(anchor.range.startContainer) || records.some((record) => anchor.root.contains(record.target)) && anchor.root.textContent !== anchor.textAtLookup) closeCard();
     });
     observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
-    current = { id, card, observer };
-    void send({ type: "lookup", id, reading: anchor.reading }).then((reply) => {
+    current = { id, card, observer, pending: true };
+    void send({ type: "lookup", id, reading: anchor.reading }).catch(() => ({ ok: false, error: "reload" })).then((reply) => {
       if (current?.id !== id) return;
+      current.pending = false;
       if (!reply || !reply.ok && ["disabled", "cancelled"].includes(reply.error)) {
         closeCard();
         return;
       }
       card.show(reply);
-    }).catch(() => {
-      if (current?.id === id) card.show({ ok: false, error: "reload" });
     });
   }
   function cryptoId() {
@@ -496,6 +507,10 @@
     }
     if (msg?.type === "refresh") {
       void refresh();
+      return;
+    }
+    if (msg?.type === "preview" && current?.pending && current.id === msg.id) {
+      current.card.showMeanings(msg.explanation);
       return;
     }
     if (msg?.type === "selection" && enabled && menuRange && document.designMode !== "on") {

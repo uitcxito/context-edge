@@ -10,7 +10,7 @@ let buttons = 0;
 let enabled = false;
 let stateVersion = 0;
 let menuRange: Range | null = null;
-let current: { id: string; card: Card; observer: MutationObserver } | null = null;
+let current: { id: string; card: Card; observer: MutationObserver; pending: boolean } | null = null;
 async function send<T>(message: ClientMessage): Promise<T> {
   return chrome.runtime.sendMessage(message);
 }
@@ -51,14 +51,15 @@ function lookup(anchor: Anchor) {
       (records.some(record => anchor.root.contains(record.target)) && anchor.root.textContent !== anchor.textAtLookup)) closeCard();
   });
   observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
-  current = { id, card, observer };
+  current = { id, card, observer, pending: true };
   void send<Reply>({ type: 'lookup', id, reading: anchor.reading })
+    .catch((): Reply => ({ ok: false, error: 'reload' }))
     .then(reply => {
       if (current?.id !== id) return;
+      current.pending = false;
       if (!reply || (!reply.ok && ['disabled', 'cancelled'].includes(reply.error))) { closeCard(); return; }
       card.show(reply);
-    })
-    .catch(() => { if (current?.id === id) card.show({ ok: false, error: 'reload' }); });
+    });
 }
 // randomUUID is unavailable to content scripts on some non-secure HTTP pages.
 function cryptoId() { return Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-'); }
@@ -104,6 +105,10 @@ chrome.runtime.onMessage.addListener((msg: WorkerMessage, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return;
   if (msg?.type === 'site') { respond(location.hostname); return; }
   if (msg?.type === 'refresh') { void refresh(); return; }
+  if (msg?.type === 'preview' && current?.pending && current.id === msg.id) {
+    current.card.showMeanings(msg.explanation);
+    return;
+  }
   if (msg?.type === 'selection' && enabled && menuRange && document.designMode !== 'on') {
     const range = menuRange;
     menuRange = null;

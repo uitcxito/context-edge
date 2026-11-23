@@ -12,7 +12,7 @@ test('link lookup waits for release, validates the request and renders a bilingu
   await expect(r.card.locator('.zh')).toHaveText('向潜在投资人推介项目的说辞。');
   await expect(r.card.getByRole('button', { name: 'More' })).toHaveCount(0);
   expect(r.calls).toHaveLength(1);
-  expect(r.calls[0]).toMatchObject({ model: 'gpt-6-luna', strict: true, noStore: true, fromWorker: true, authorized: true,
+  expect(r.calls[0]).toMatchObject({ model: 'gpt-6-luna', stream: true, reasoning: 'none', strict: true, noStore: true, fromWorker: true, authorized: true,
     input: { selected_text: 'pitch', current_sentence: 'My pitch isn’t working on the fundraising side.',
       previous_context: 'We met with the investors on Thursday.', following_context: 'We have one more meeting tomorrow.', selected_start: 3, selected_end: 8 }
   });
@@ -32,7 +32,7 @@ test('settings save, preserve and remove the key; missing-key card opens setting
   await r.open();
   await r.tap('#pitch');
   await expect(r.card.locator('.zh')).toBeVisible();
-  expect(r.calls[0]).toMatchObject({ authorized: true, model: 'model-fixture' });
+  expect(r.calls[0]).toMatchObject({ authorized: true, model: 'model-fixture', stream: true, reasoning: undefined });
   await r.options();
   await r.page.getByRole('button', { name: '移除密钥' }).click();
   await expect(r.page.locator('#key-state')).toHaveText('尚未保存密钥。');
@@ -158,4 +158,42 @@ test('a persisted cache survives a page reload and a reused SPA text node invali
   await expect(r.card.locator('.zh')).toBeVisible();
   expect(r.calls).toHaveLength(2);
   expect(r.calls[1]!.input.selected_text).toBe('draft');
+});
+
+test('shows each validated line while the stream is open and only caches a successful completion', async ({ reader: r }) => {
+  // route.fulfill buffers the whole body. Feed the worker an open fetch stream so each assertion can hold back the next event.
+  const streams = await r.worker.evaluateHandle(() => {
+    const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
+    globalThis.fetch = async () => new Response(new ReadableStream<Uint8Array>({ start: c => { streams.push(c); } }),
+      { headers: { 'Content-Type': 'text/event-stream' } });
+    return streams;
+  });
+  const emit = (event: object) => streams.evaluate((list, payload) => {
+    list.at(-1)!.enqueue(new TextEncoder().encode('data: ' + JSON.stringify(payload) + '\n\n'));
+  }, event);
+  const requests = () => streams.evaluate(list => list.length);
+  const first = { status: 'ok', target: 'earn the right to get there', meaning_en: 'Earn the confidence of investors.' };
+  const final = { ...first, meaning_zh: '赢得投资人的信心。', note_en: 'Show them a credible plan.' };
+  await r.open();
+  await r.tap('#right');
+  await expect.poll(requests).toBe(1);
+  await emit({ type: 'response.output_text.delta', delta: JSON.stringify(first).slice(0, -1) });
+  await expect(r.card).toContainText(first.meaning_en);
+  await expect(r.card.getByRole('heading')).toHaveText(first.target);
+  await expect(r.card.locator('.zh')).toHaveCount(0);
+  await emit({ type: 'response.output_text.delta', delta: ',"meaning_zh":' + JSON.stringify(final.meaning_zh) });
+  await expect(r.card.locator('.zh')).toHaveText(final.meaning_zh);
+  await expect(r.card.getByRole('button', { name: 'More' })).toHaveCount(0);
+  await emit({ type: 'response.incomplete' });
+  await expect(r.card).toContainText('没有返回完整释义');
+  await expect(r.card.getByRole('heading')).toHaveText('right');
+  await expect(r.card.locator('.zh')).toHaveCount(0);
+  await r.card.getByRole('button', { name: '再试一次' }).click();
+  await expect.poll(requests).toBe(2);
+  await emit({ type: 'response.completed', response: envelope(final) });
+  await expect(r.card.getByRole('button', { name: 'More' })).toBeVisible();
+  await r.page.keyboard.press('Escape');
+  await r.tap('#right');
+  await expect(r.card.locator('.zh')).toHaveText(final.meaning_zh);
+  expect(await requests()).toBe(2);
 });

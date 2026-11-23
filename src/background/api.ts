@@ -1,4 +1,5 @@
-import { type ErrorCode, type Explanation, type Reading } from '../shared';
+import { EventSourceParserStream } from 'eventsource-parser/stream';
+import { DEFAULT_MODEL, type ErrorCode, type Explanation, type ExplanationPreview, type Reading } from '../shared';
 import instructions from './instructions.txt';
 
 export class LookupFailure extends Error {
@@ -57,16 +58,24 @@ function coversOccurrence(r: Reading, target: string) {
   }
   return false;
 }
+function validTarget(r: Reading, target: unknown): target is string {
+  return typeof target === 'string' && target.length > 0 && target === target.trim() && coversOccurrence(r, target);
+}
+function validEnglish(text: unknown): text is string {
+  return typeof text === 'string' && text.length <= 650 && /\p{Script=Latin}/u.test(text);
+}
+function validChinese(text: unknown): text is string {
+  return typeof text === 'string' && text.length <= 400 && /\p{Script=Han}/u.test(text);
+}
 export function validateExplanation(data: unknown, r: Reading): Explanation {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new LookupFailure('invalid');
   const v = data as Explanation;
   if (Object.keys(v).length !== fields.length || !fields.every(k => typeof v[k] === 'string') ||
       !['ok', 'unclear'].includes(v.status)) throw new LookupFailure('invalid');
-  if (!v.target.trim() || v.target !== v.target.trim() || !coversOccurrence(r, v.target)) throw new LookupFailure('target');
+  if (!validTarget(r, v.target)) throw new LookupFailure('target');
   if (v.status === 'unclear') {
     if (v.target !== r.selected || v.meaning_en || v.meaning_zh || v.note_en) throw new LookupFailure('invalid');
-  } else if (!/\p{Script=Latin}/u.test(v.meaning_en) || !/\p{Script=Han}/u.test(v.meaning_zh) || v.meaning_en.length > 650 ||
-    v.meaning_zh.length > 400 || v.note_en.length > 800) throw new LookupFailure('invalid');
+  } else if (!validEnglish(v.meaning_en) || !validChinese(v.meaning_zh) || v.note_en.length > 800) throw new LookupFailure('invalid');
   return { status: v.status, target: v.target, meaning_en: v.meaning_en.trim(), meaning_zh: v.meaning_zh.trim(), note_en: v.note_en.trim() };
 }
 interface OutputPart { type?: string; text?: unknown }
@@ -83,6 +92,63 @@ export function parseResponse(body: ResponseBody | null, reading: Reading) {
   try { data = JSON.parse(text); } catch { throw new LookupFailure('invalid'); }
   return validateExplanation(data, reading);
 }
+
+// The schema is a flat object of strings. At a possible end of a string, close
+// the object and let JSON.parse distinguish complete values from keys or escaped quotes.
+function readPreview(text: string, from: number, reading: Reading): ExplanationPreview | undefined {
+  const endings = /"(?=\s*(?:[,}]|$))/g;
+  endings.lastIndex = from;
+  let latest: ExplanationPreview | undefined;
+  for (const end of text.matchAll(endings)) {
+    let fields: Partial<Explanation>;
+    try { fields = JSON.parse(text.slice(0, end.index + 1) + '}'); } catch { continue; }
+    if (fields.status !== 'ok' || !validTarget(reading, fields.target) || !validEnglish(fields.meaning_en)) continue;
+    if (fields.meaning_zh !== undefined && !validChinese(fields.meaning_zh)) continue;
+    latest = { target: fields.target, meaning_en: fields.meaning_en.trim(), meaning_zh: fields.meaning_zh?.trim() ?? '' };
+  }
+  return latest;
+}
+
+type PreviewListener = (preview: ExplanationPreview) => void;
+const PREVIEW_LIMIT = 24 * 1024;
+interface ResponseEvent { type?: string; delta?: unknown; response?: ResponseBody }
+async function readStream(body: NonNullable<Response['body']>, reading: Reading, signal: AbortSignal, onPreview?: PreviewListener) {
+  const reader = body.pipeThrough(new TextDecoderStream(), { signal }).pipeThrough(new EventSourceParserStream()).getReader();
+  let text = '';
+  let previous: ExplanationPreview | undefined;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done || value.data === '[DONE]') throw new LookupFailure('incomplete');
+      let event: ResponseEvent | null;
+      try { event = JSON.parse(value.data); } catch { throw new LookupFailure('invalid'); }
+      switch (event?.type) {
+        case 'response.completed': return parseResponse(event.response ?? null, reading);
+        case 'response.incomplete': throw new LookupFailure('incomplete');
+        case 'response.failed':
+        case 'error': throw new LookupFailure('service');
+        case 'response.refusal.delta':
+        case 'response.refusal.done': throw new LookupFailure('refusal');
+        case 'response.output_text.delta': {
+          // Once both lines are visible (or the prefix is oversized), wait for the authoritative final message.
+          if (!onPreview || previous?.meaning_zh || typeof event.delta !== 'string' || text.length >= PREVIEW_LIMIT) break;
+          const from = text.length;
+          text += event.delta.slice(0, PREVIEW_LIMIT - from);
+          const preview = readPreview(text, from, reading);
+          if (preview && previous?.meaning_zh !== preview.meaning_zh) {
+            previous = preview;
+            onPreview(preview);
+          }
+          break;
+        }
+      }
+    }
+  } finally {
+    void reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
 function httpFailure(status: number, code: string | undefined): ErrorCode {
   if (status === 401) return 'badKey';
   if (status === 403) return 'forbidden';
@@ -91,7 +157,7 @@ function httpFailure(status: number, code: string | undefined): ErrorCode {
   if (status === 408 || status === 504) return 'timeout';
   return 'service';
 }
-export async function explain(reading: Reading, key: string, model: string, cancel: AbortSignal) {
+export async function explain(reading: Reading, key: string, model: string, cancel: AbortSignal, onPreview?: PreviewListener) {
   const timeout = AbortSignal.timeout(20_000);
   const signal = AbortSignal.any([cancel, timeout]);
   try {
@@ -99,7 +165,8 @@ export async function explain(reading: Reading, key: string, model: string, canc
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
       credentials: 'omit', redirect: 'error', cache: 'no-store', signal,
       body: JSON.stringify({
-        model, store: false, text: { format },
+        model, store: false, stream: true, text: { format },
+        reasoning: model === DEFAULT_MODEL ? { effort: 'none' } : undefined,
         instructions: instructions + '\nExplain the expression in the final user message. Offsets identify the exact occurrence (zero-based UTF-16, end exclusive). Copy the target exactly from current_sentence, including its case.',
         input: [...demonstrations, { role: 'user', content: inputText(reading) }]
       })
@@ -107,6 +174,10 @@ export async function explain(reading: Reading, key: string, model: string, canc
     if (!response.ok) {
       const detail = await response.json().catch(() => null);
       throw new LookupFailure(httpFailure(response.status, detail?.error?.code));
+    }
+    if (response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) {
+      if (!response.body) throw new LookupFailure('incomplete');
+      return await readStream(response.body, reading, signal, onPreview);
     }
     let body: ResponseBody;
     try { body = await response.json(); } catch { throw new LookupFailure('invalid'); }

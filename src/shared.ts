@@ -22,6 +22,7 @@ export interface Explanation {
   meaning_zh: string;
   note_en: string;
 }
+export type ExplanationPreview = Pick<Explanation, 'target' | 'meaning_en' | 'meaning_zh'>;
 export type ErrorCode = 'disabled' | 'cancelled' | 'noKey' | 'badKey' | 'forbidden' |
   'model' | 'quota' | 'rate' | 'network' | 'timeout' | 'refusal' | 'incomplete' |
   'invalid' | 'target' | 'service' | 'settings' | 'reload';
@@ -30,7 +31,10 @@ export type ClientMessage =
   | { type: 'state' | 'options' }
   | { type: 'lookup'; id: string; reading: Reading }
   | { type: 'cancel'; id: string };
-export type WorkerMessage = { type: 'refresh' | 'site' } | { type: 'selection'; text: string };
+export type WorkerMessage =
+  | { type: 'refresh' | 'site' }
+  | { type: 'selection'; text: string }
+  | { type: 'preview'; id: string; explanation: ExplanationPreview };
 
 export function englishSelection(text: string) {
   return /\p{Script=Latin}/u.test(text) && !/\p{L}/u.test(text.replace(/\p{Script=Latin}/gu, ''));
