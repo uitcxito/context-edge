@@ -2,7 +2,7 @@ export const DEFAULT_MODEL = 'gpt-6-luna';
 export const CONTEXT_LIMIT = 1200;
 export const TARGET_LIMIT = 260;
 export const TITLE_LIMIT = 100;
-export const PROMPT_VERSION = 'context-v1.0';
+export const PROMPT_VERSION = 'context-v1.1';
 export const LANGUAGES = 'en+zh-CN';
 
 export interface Reading {
