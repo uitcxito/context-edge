@@ -59,7 +59,7 @@ function flatten(root: Element): Block {
 
 export interface Anchor {
   range: Range;
-  rect: DOMRect;
+  getRect(): DOMRect | null;
   root: Element;
   /** Detect replacement of the reading block while a card is visible. */
   textAtLookup: string;
@@ -84,8 +84,7 @@ function glyphAt(p: Point, hit: Element) {
     const range = document.createRange();
     range.setStart(node, index);
     range.setEnd(node, index + 1);
-    const rect = [...range.getClientRects()].find(r => includes(r, p));
-    if (rect) return { node, index, rect };
+    if ([...range.getClientRects()].some(r => includes(r, p))) return { node, index, range };
   }
   return null;
 }
@@ -94,10 +93,49 @@ function language(root: Element, leaf: Text) {
   if (onX && mark && !root.contains(mark)) return '';
   return mark?.getAttribute('lang') ?? '';
 }
-function makeAnchor(root: Element, block: Block, from: number, to: number, range: Range, rect: DOMRect, leaf: Text): Anchor | null {
+function fragmentRect(range: Range, glyph?: Range) {
+  const rects = [...range.getClientRects()];
+  if (glyph && rects.length > 1) {
+    // A word can wrap or cross inline tags. Stay on the fragment originally pointed at.
+    const hit = glyph.getBoundingClientRect();
+    const center = { x: hit.left + hit.width / 2, y: hit.top + hit.height / 2 };
+    return rects.find(rect => includes(rect, center)) ?? hit;
+  }
+  return rects.find(rect => rect.width && rect.height);
+}
+function visibleRect(range: Range, leaf: Text, glyph?: Range): DOMRect | null {
+  const rect = fragmentRect(range, glyph);
+  if (!rect) return null;
+  let left = Math.max(rect.left, 0), right = Math.min(rect.right, innerWidth);
+  let top = Math.max(rect.top, 0), bottom = Math.min(rect.bottom, innerHeight);
+  if (left >= right || top >= bottom) return null;
+  for (let el = leaf.parentElement; el && el !== document.documentElement; el = el.parentElement) {
+    const { overflowX, overflowY, display } = getComputedStyle(el);
+    if ((overflowX === 'visible' && overflowY === 'visible') || display === 'inline' || display === 'contents') continue;
+    // When the root has visible overflow, the browser applies the body's overflow to the viewport.
+    if (el === document.body && getComputedStyle(document.documentElement).overflow === 'visible') continue;
+    const box = el.getBoundingClientRect();
+    if (overflowX !== 'visible') {
+      const x = box.left + el.clientLeft;
+      left = Math.max(left, x);
+      right = Math.min(right, x + el.clientWidth);
+    }
+    if (overflowY !== 'visible') {
+      const y = box.top + el.clientTop;
+      top = Math.max(top, y);
+      bottom = Math.min(bottom, y + el.clientHeight);
+    }
+    if (left >= right || top >= bottom) return null;
+  }
+  return new DOMRect(left, top, right - left, bottom - top);
+}
+function makeAnchor(root: Element, block: Block, from: number, to: number, range: Range, leaf: Text, glyph?: Range): Anchor | null {
   if (!englishBlock(block.raw, language(root, leaf))) return null;
   const reading = extractReading(block.raw, from, to, onX ? '' : document.title);
-  return reading && { root, range, rect, reading, textAtLookup: root.textContent ?? '' };
+  return reading && {
+    root, range, reading, textAtLookup: root.textContent ?? '',
+    getRect: () => visibleRect(range, leaf, glyph)
+  };
 }
 export function pointedWord(p: Point): Anchor | null {
   const hit = document.elementFromPoint(p.x, p.y);
@@ -116,8 +154,7 @@ export function pointedWord(p: Point): Anchor | null {
   const range = document.createRange();
   range.setStart(first.node, word.start - first.start);
   range.setEnd(last.node, word.end - last.start);
-  const rect = [...range.getClientRects()].find(r => includes(r, p)) ?? glyph.rect;
-  return makeAnchor(root, block, word.start, word.end, range, rect, glyph.node);
+  return makeAnchor(root, block, word.start, word.end, range, glyph.node, glyph.range);
 }
 export function selectionAnchor(range: Range, menuText: string): Anchor | null {
   if (range.collapsed || !range.commonAncestorContainer.isConnected) return null;
@@ -132,6 +169,5 @@ export function selectionAnchor(range: Range, menuText: string): Anchor | null {
   const to = last.start + (range.endContainer === last.node ? range.endOffset : last.node.length);
   const normalize = (s: string) => s.trim().replace(/\s+/gu, ' ');
   if (normalize(block.raw.slice(from, to)) !== normalize(menuText)) return null;
-  const rect = [...range.getClientRects()].find(r => r.width && r.height);
-  return rect ? makeAnchor(root, block, from, to, range, rect, first.node) : null;
+  return fragmentRect(range) ? makeAnchor(root, block, from, to, range, first.node) : null;
 }

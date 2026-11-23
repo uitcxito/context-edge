@@ -42,7 +42,7 @@ function lookup(anchor: Anchor) {
   closeCard();
   const id = cryptoId();
   const page = location.href;
-  const card = new Card(anchor.rect, anchor.reading.selected, () => lookup(anchor), () => {
+  const card = new Card(anchor.getRect, anchor.reading.selected, () => lookup(anchor), () => {
     void send({ type: 'options' }).catch(() => undefined);
   });
   const observer = new MutationObserver(records => {
@@ -117,13 +117,13 @@ chrome.runtime.onMessage.addListener((msg: WorkerMessage, sender, respond) => {
   }
 });
 window.addEventListener('scroll', e => {
-  if (current && !e.composedPath().includes(current.card.host)) closeCard();
+  if (current && !e.composedPath().includes(current.card.host)) current.card.schedulePosition();
   tap.cancel();
 }, capture);
 window.addEventListener('blur', () => { tap.reset(); buttons = 0; });
 window.addEventListener('pagehide', reset);
 window.addEventListener('pageshow', e => { if (e.persisted) void refresh(); });
-window.addEventListener('resize', closeCard);
+window.addEventListener('resize', () => current?.card.schedulePosition());
 window.addEventListener('hashchange', reset);
 window.addEventListener('popstate', reset);
 (window as Window & { navigation?: EventTarget }).navigation?.addEventListener('currententrychange', reset);

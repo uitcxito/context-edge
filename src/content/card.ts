@@ -27,8 +27,14 @@ export class Card {
   private chinese = element('p', undefined, 'zh');
   private previousFocus = document.activeElement;
   private resize = new ResizeObserver(() => this.position());
+  private frame: number | null = null;
 
-  constructor(private rect: DOMRect, private target: string, private retry: () => void, private settings: () => void) {
+  constructor(
+    private getAnchorRect: () => DOMRect | null,
+    private target: string,
+    private retry: () => void,
+    private settings: () => void
+  ) {
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(css);
     this.shadow.adoptedStyleSheets = [sheet];
@@ -50,13 +56,23 @@ export class Card {
     this.panel.focus({ preventScroll: true });
     this.resize.observe(this.panel);
   }
+  schedulePosition() {
+    if (this.frame !== null) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = null;
+      this.position();
+    });
+  }
   private position() {
     if (!this.host.isConnected) return;
+    const rect = this.getAnchorRect();
+    this.host.toggleAttribute('hidden', !rect);
+    if (!rect) return;
     const { width, height } = this.panel.getBoundingClientRect();
     const margin = 8, gap = 6;
-    const x = Math.max(margin, Math.min(this.rect.left, innerWidth - width - margin));
-    const below = this.rect.bottom + gap;
-    const y = below + height <= innerHeight - margin ? below : Math.max(margin, this.rect.top - height - gap);
+    const x = Math.max(margin, Math.min(rect.left, innerWidth - width - margin));
+    const below = rect.bottom + gap;
+    const y = below + height <= innerHeight - margin ? below : Math.max(margin, rect.top - height - gap);
     this.host.style.setProperty('left', x + 'px', 'important');
     this.host.style.setProperty('top', Math.min(y, Math.max(margin, innerHeight - height - margin)) + 'px', 'important');
   }
@@ -112,6 +128,7 @@ export class Card {
     this.position();
   }
   remove() {
+    if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.resize.disconnect();
     const restore = this.host === document.activeElement && this.previousFocus instanceof HTMLElement && this.previousFocus.isConnected;
     this.host.remove();

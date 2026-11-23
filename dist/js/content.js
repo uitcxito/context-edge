@@ -174,8 +174,7 @@
       const range = document.createRange();
       range.setStart(node, index);
       range.setEnd(node, index + 1);
-      const rect = [...range.getClientRects()].find((r) => includes(r, p));
-      if (rect) return { node, index, rect };
+      if ([...range.getClientRects()].some((r) => includes(r, p))) return { node, index, range };
     }
     return null;
   }
@@ -184,10 +183,50 @@
     if (onX && mark && !root.contains(mark)) return "";
     return mark?.getAttribute("lang") ?? "";
   }
-  function makeAnchor(root, block, from, to, range, rect, leaf) {
+  function fragmentRect(range, glyph) {
+    const rects = [...range.getClientRects()];
+    if (glyph && rects.length > 1) {
+      const hit = glyph.getBoundingClientRect();
+      const center = { x: hit.left + hit.width / 2, y: hit.top + hit.height / 2 };
+      return rects.find((rect) => includes(rect, center)) ?? hit;
+    }
+    return rects.find((rect) => rect.width && rect.height);
+  }
+  function visibleRect(range, leaf, glyph) {
+    const rect = fragmentRect(range, glyph);
+    if (!rect) return null;
+    let left = Math.max(rect.left, 0), right = Math.min(rect.right, innerWidth);
+    let top = Math.max(rect.top, 0), bottom = Math.min(rect.bottom, innerHeight);
+    if (left >= right || top >= bottom) return null;
+    for (let el = leaf.parentElement; el && el !== document.documentElement; el = el.parentElement) {
+      const { overflowX, overflowY, display } = getComputedStyle(el);
+      if (overflowX === "visible" && overflowY === "visible" || display === "inline" || display === "contents") continue;
+      if (el === document.body && getComputedStyle(document.documentElement).overflow === "visible") continue;
+      const box = el.getBoundingClientRect();
+      if (overflowX !== "visible") {
+        const x = box.left + el.clientLeft;
+        left = Math.max(left, x);
+        right = Math.min(right, x + el.clientWidth);
+      }
+      if (overflowY !== "visible") {
+        const y = box.top + el.clientTop;
+        top = Math.max(top, y);
+        bottom = Math.min(bottom, y + el.clientHeight);
+      }
+      if (left >= right || top >= bottom) return null;
+    }
+    return new DOMRect(left, top, right - left, bottom - top);
+  }
+  function makeAnchor(root, block, from, to, range, leaf, glyph) {
     if (!englishBlock(block.raw, language(root, leaf))) return null;
     const reading = extractReading(block.raw, from, to, onX ? "" : document.title);
-    return reading && { root, range, rect, reading, textAtLookup: root.textContent ?? "" };
+    return reading && {
+      root,
+      range,
+      reading,
+      textAtLookup: root.textContent ?? "",
+      getRect: () => visibleRect(range, leaf, glyph)
+    };
   }
   function pointedWord(p) {
     const hit = document.elementFromPoint(p.x, p.y);
@@ -206,8 +245,7 @@
     const range = document.createRange();
     range.setStart(first.node, word.start - first.start);
     range.setEnd(last.node, word.end - last.start);
-    const rect = [...range.getClientRects()].find((r) => includes(r, p)) ?? glyph.rect;
-    return makeAnchor(root, block, word.start, word.end, range, rect, glyph.node);
+    return makeAnchor(root, block, word.start, word.end, range, glyph.node, glyph.range);
   }
   function selectionAnchor(range, menuText) {
     if (range.collapsed || !range.commonAncestorContainer.isConnected) return null;
@@ -222,12 +260,11 @@
     const to = last.start + (range.endContainer === last.node ? range.endOffset : last.node.length);
     const normalize = (s) => s.trim().replace(/\s+/gu, " ");
     if (normalize(block.raw.slice(from, to)) !== normalize(menuText)) return null;
-    const rect = [...range.getClientRects()].find((r) => r.width && r.height);
-    return rect ? makeAnchor(root, block, from, to, range, rect, first.node) : null;
+    return fragmentRect(range) ? makeAnchor(root, block, from, to, range, first.node) : null;
   }
 
   // src/content/card.css
-  var card_default = ':host {\n  all: initial;\n  display: block !important;\n  position: fixed !important;\n  box-sizing: border-box !important;\n  inset: auto;\n  width: min(320px, calc(100vw - 16px)) !important;\n  min-width: 0 !important;\n  max-width: none !important;\n  height: auto !important;\n  padding: 0 !important;\n  margin: 0 !important;\n  border: 0 !important;\n  background: transparent !important;\n  overflow: visible !important;\n  z-index: 2147483647 !important;\n  color-scheme: light dark;\n}\n:host::backdrop { background: transparent; pointer-events: none; }\n* { box-sizing: border-box; }\narticle {\n  --paper: #fffcf6; --ink: #292824; --sub: #67645d; --line: #e8e1d6; --accent: #316057;\n  font: 14px/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;\n  color: var(--ink); background: var(--paper); border: 1px solid var(--line);\n  border-radius: 15px; padding: 15px;\n  box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);\n  overflow-wrap: anywhere; overflow-y: auto; overscroll-behavior: contain;\n  max-height: calc(100dvh - 16px); text-align: start; direction: ltr;\n  animation: enter 130ms ease-out;\n}\n@keyframes enter { from { opacity: 0; } to { opacity: 1; } }\n@media (prefers-reduced-motion: reduce) { article { animation: none; } }\n@media (prefers-color-scheme: dark) {\n  article { --paper: #292925; --ink: #f5f1e8; --sub: #c0bcb1; --line: #4b4b43; --accent: #acd7c2; }\n}\narticle:focus { outline: none; }\nh2 { font: 600 16px/1.32 "Segoe UI", system-ui, sans-serif; margin: 0 0 7px; color: var(--ink); }\np { margin: 0; }\n.zh, .status, .note { font-size: 13px; color: var(--sub); }\n.zh { margin-top: 5px; }\nbutton {\n  appearance: none; border: 0; border-radius: 4px; background: transparent; color: var(--accent);\n  font: 600 12px/1.5 "Segoe UI", system-ui, sans-serif; padding: 3px 2px; margin-top: 8px; cursor: pointer;\n}\nbutton:hover { text-decoration: underline; }\nbutton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n.note { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }\n';
+  var card_default = ':host {\n  all: initial;\n  display: block !important;\n  position: fixed !important;\n  box-sizing: border-box !important;\n  inset: auto;\n  width: min(320px, calc(100vw - 16px)) !important;\n  min-width: 0 !important;\n  max-width: none !important;\n  height: auto !important;\n  padding: 0 !important;\n  margin: 0 !important;\n  border: 0 !important;\n  background: transparent !important;\n  overflow: visible !important;\n  z-index: 2147483647 !important;\n  color-scheme: light dark;\n}\n:host([hidden]) { display: none !important; }\n:host::backdrop { background: transparent; pointer-events: none; }\n* { box-sizing: border-box; }\narticle {\n  --paper: #fffcf6; --ink: #292824; --sub: #67645d; --line: #e8e1d6; --accent: #316057;\n  font: 14px/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;\n  color: var(--ink); background: var(--paper); border: 1px solid var(--line);\n  border-radius: 15px; padding: 15px;\n  box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);\n  overflow-wrap: anywhere; overflow-y: auto;\n  max-height: calc(100dvh - 16px); text-align: start; direction: ltr;\n  animation: enter 130ms ease-out;\n}\n@keyframes enter { from { opacity: 0; } to { opacity: 1; } }\n@media (prefers-reduced-motion: reduce) { article { animation: none; } }\n@media (prefers-color-scheme: dark) {\n  article { --paper: #292925; --ink: #f5f1e8; --sub: #c0bcb1; --line: #4b4b43; --accent: #acd7c2; }\n}\narticle:focus { outline: none; }\nh2 { font: 600 16px/1.32 "Segoe UI", system-ui, sans-serif; margin: 0 0 7px; color: var(--ink); }\np { margin: 0; }\n.zh, .status, .note { font-size: 13px; color: var(--sub); }\n.zh { margin-top: 5px; }\nbutton {\n  appearance: none; border: 0; border-radius: 4px; background: transparent; color: var(--accent);\n  font: 600 12px/1.5 "Segoe UI", system-ui, sans-serif; padding: 3px 2px; margin-top: 8px; cursor: pointer;\n}\nbutton:hover { text-decoration: underline; }\nbutton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n.note { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }\n';
 
   // src/content/card.ts
   var messages = {
@@ -256,8 +293,8 @@
     return node;
   }
   var Card = class {
-    constructor(rect, target, retry, settings) {
-      this.rect = rect;
+    constructor(getAnchorRect, target, retry, settings) {
+      this.getAnchorRect = getAnchorRect;
       this.target = target;
       this.retry = retry;
       this.settings = settings;
@@ -282,7 +319,7 @@
       this.panel.focus({ preventScroll: true });
       this.resize.observe(this.panel);
     }
-    rect;
+    getAnchorRect;
     target;
     retry;
     settings;
@@ -295,13 +332,24 @@
     chinese = element("p", void 0, "zh");
     previousFocus = document.activeElement;
     resize = new ResizeObserver(() => this.position());
+    frame = null;
+    schedulePosition() {
+      if (this.frame !== null) return;
+      this.frame = requestAnimationFrame(() => {
+        this.frame = null;
+        this.position();
+      });
+    }
     position() {
       if (!this.host.isConnected) return;
+      const rect = this.getAnchorRect();
+      this.host.toggleAttribute("hidden", !rect);
+      if (!rect) return;
       const { width, height } = this.panel.getBoundingClientRect();
       const margin = 8, gap = 6;
-      const x = Math.max(margin, Math.min(this.rect.left, innerWidth - width - margin));
-      const below = this.rect.bottom + gap;
-      const y = below + height <= innerHeight - margin ? below : Math.max(margin, this.rect.top - height - gap);
+      const x = Math.max(margin, Math.min(rect.left, innerWidth - width - margin));
+      const below = rect.bottom + gap;
+      const y = below + height <= innerHeight - margin ? below : Math.max(margin, rect.top - height - gap);
       this.host.style.setProperty("left", x + "px", "important");
       this.host.style.setProperty("top", Math.min(y, Math.max(margin, innerHeight - height - margin)) + "px", "important");
     }
@@ -359,6 +407,7 @@
       this.position();
     }
     remove() {
+      if (this.frame !== null) cancelAnimationFrame(this.frame);
       this.resize.disconnect();
       const restore = this.host === document.activeElement && this.previousFocus instanceof HTMLElement && this.previousFocus.isConnected;
       this.host.remove();
@@ -429,7 +478,7 @@
     closeCard();
     const id = cryptoId();
     const page = location.href;
-    const card = new Card(anchor.rect, anchor.reading.selected, () => lookup(anchor), () => {
+    const card = new Card(anchor.getRect, anchor.reading.selected, () => lookup(anchor), () => {
       void send({ type: "options" }).catch(() => void 0);
     });
     const observer = new MutationObserver((records) => {
@@ -521,7 +570,7 @@
     }
   });
   window.addEventListener("scroll", (e) => {
-    if (current && !e.composedPath().includes(current.card.host)) closeCard();
+    if (current && !e.composedPath().includes(current.card.host)) current.card.schedulePosition();
     tap.cancel();
   }, capture);
   window.addEventListener("blur", () => {
@@ -532,7 +581,7 @@
   window.addEventListener("pageshow", (e) => {
     if (e.persisted) void refresh();
   });
-  window.addEventListener("resize", closeCard);
+  window.addEventListener("resize", () => current?.card.schedulePosition());
   window.addEventListener("hashchange", reset);
   window.addEventListener("popstate", reset);
   window.navigation?.addEventListener("currententrychange", reset);

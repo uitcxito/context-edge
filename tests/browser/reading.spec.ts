@@ -1,5 +1,11 @@
 import { answer, envelope, expect, sample, test } from './fixture';
-import type { Route } from '@playwright/test';
+import type { Locator, Route } from '@playwright/test';
+
+async function offsetFromWord(card: Locator, word: Locator) {
+  const [panel, text] = await Promise.all([card.boundingBox(), word.boundingBox()]);
+  if (!panel || !text) return null;
+  return [Math.round(panel.x - text.x), Math.round(panel.y - text.y - text.height)];
+}
 
 test('link lookup waits for release, validates the request and renders a bilingual Shadow DOM card', async ({ reader: r }) => {
   await r.open();
@@ -21,6 +27,65 @@ test('link lookup waits for release, validates the request and renders a bilingu
   await r.page.keyboard.press('Escape');
   await expect(r.card).toHaveCount(0);
 });
+test('a Ctrl lookup follows the word on wheel scroll and keeps its pending reply while out of view', async ({ reader: r }) => {
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const respond = r.respond;
+  r.respond = async (route, call) => {
+    await pending;
+    await respond(route, call);
+  };
+  const word = r.page.locator('#pitch');
+  try {
+    await r.open('<article style="padding-top:280px;min-height:2000px"><p>My <span id="pitch">pitch</span> needs work.</p></article>');
+    await r.tap('#pitch', 2);
+    await expect(r.card).toContainText('正在读取');
+    await expect.poll(() => r.calls.length).toBe(1);
+    await expect.poll(() => offsetFromWord(r.card, word)).toEqual([0, 6]);
+
+    await r.page.mouse.wheel(0, 45);
+    await expect.poll(() => r.page.evaluate(() => scrollY)).toBeGreaterThan(30);
+    await expect(r.card).toBeVisible();
+    await expect.poll(() => offsetFromWord(r.card, word)).toEqual([0, 6]);
+
+    await r.page.mouse.wheel(0, 500);
+    await expect.poll(() => word.evaluate(el => el.getBoundingClientRect().bottom)).toBeLessThan(0);
+    await expect(r.card).toBeHidden();
+    await expect(r.card).toHaveCount(1);
+    release();
+    await expect(r.card.locator('.zh')).toContainText('投资人');
+    await expect(r.card).toBeHidden();
+
+    await r.page.mouse.wheel(0, -700);
+    await expect(r.card.locator('.zh')).toBeVisible();
+    await r.page.setViewportSize({ width: 850, height: 640 });
+    await expect.poll(() => offsetFromWord(r.card, word)).toEqual([0, 6]);
+    expect(r.calls).toHaveLength(1);
+  } finally { release(); }
+});
+
+test('a lookup follows the pointed word fragment within a nested scroll container', async ({ reader: r }) => {
+  await r.open('<section id="pane" style="margin:180px 0 0 160px;width:500px;height:200px;overflow:auto">' +
+    '<div style="width:900px;height:800px;padding:110px 0 0 140px"><p>They are fund<strong id="part">raising</strong> abroad.</p></div></section>');
+  const pane = r.page.locator('#pane'), part = r.page.locator('#part');
+  await r.tap('#part', 2);
+  await expect(r.card.getByRole('heading')).toHaveText('fundraising');
+  await expect(r.card.locator('.zh')).toBeVisible();
+  await r.page.mouse.wheel(60, 45);
+  await expect.poll(() => pane.evaluate(el => [el.scrollLeft, el.scrollTop])).toEqual([60, 45]);
+  await expect.poll(() => offsetFromWord(r.card, part)).toEqual([0, 6]);
+
+  await r.page.mouse.wheel(0, 195);
+  await expect.poll(() => pane.evaluate(el => el.scrollTop)).toBe(240);
+  // The word is still inside the browser viewport, but is clipped by the pane.
+  expect((await part.boundingBox())!.y).toBeGreaterThan(0);
+  await expect(r.card).toBeHidden();
+  await pane.evaluate(el => el.scrollTo(30, 20));
+  await expect(r.card.locator('.zh')).toBeVisible();
+  await expect.poll(() => offsetFromWord(r.card, part)).toEqual([0, 6]);
+  expect(r.calls).toHaveLength(1);
+});
+
 test('settings save, preserve and remove the key; missing-key card opens settings', async ({ reader: r }) => {
   await r.options();
   await expect(r.page.getByLabel('OpenAI API Key')).toHaveValue('');
@@ -114,6 +179,9 @@ test('mouse selection alone is silent; menu command explains exact phrase', asyn
   await expect(r.card.locator('.zh')).toBeVisible();
   expect(r.calls).toHaveLength(1);
   expect(r.calls[0]!.input.selected_text).toBe('break the ice');
+  await r.page.mouse.wheel(0, 25);
+  await expect.poll(() => r.page.evaluate(() => scrollY)).toBeGreaterThan(0);
+  await expect.poll(() => offsetFromWord(r.card, r.page.locator('#phrase'))).toEqual([0, 6]);
 });
 test('in-flight A cannot replace B, and closing or navigating invalidates pending results', async ({ reader: r }) => {
   const held: { release: () => void; route: Route }[] = [];
@@ -129,7 +197,7 @@ test('in-flight A cannot replace B, and closing or navigating invalidates pendin
   held[0]!.release();
   await r.page.waitForTimeout(100);
   await expect(r.card.locator('h2')).toHaveText('earn the right to get there');
-  for (const mode of ['escape', 'outside', 'scroll', 'navigation']) {
+  for (const mode of ['escape', 'outside', 'navigation']) {
     await r.page.keyboard.press('Escape');
     const expected = held.length + 1;
     await r.tap('#late');
@@ -137,14 +205,13 @@ test('in-flight A cannot replace B, and closing or navigating invalidates pendin
     await expect(r.card).toContainText('正在读取');
     if (mode === 'escape') await r.page.keyboard.press('Escape');
     if (mode === 'outside') await r.page.mouse.click(12, 12);
-    if (mode === 'scroll') await r.page.evaluate(() => window.scrollBy(0, 15));
     if (mode === 'navigation') await r.page.evaluate(() => history.pushState({}, '', '/other'));
     await expect(r.card).toHaveCount(0);
     held.at(-1)!.release();
     await r.page.waitForTimeout(80);
     await expect(r.card).toHaveCount(0);
   }
-  expect(r.calls).toHaveLength(6);
+  expect(r.calls).toHaveLength(5);
 });
 test('a persisted cache survives a page reload and a reused SPA text node invalidates its open card', async ({ reader: r }) => {
   await r.open('<p>My <span id="word">pitch</span> needs work.</p>');
