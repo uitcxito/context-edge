@@ -27,7 +27,7 @@ article {
   color: var(--ink); background: var(--paper); border: 1px solid var(--line);
   border-radius: 1em; padding: 1em;
   box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);
-  overflow-wrap: anywhere; overflow-y: auto;
+  overflow-wrap: anywhere; overflow-y: auto; scrollbar-gutter: stable;
   min-height: 0; text-align: start; direction: ltr;
   animation: enter 130ms ease-out;
 }

@@ -28,7 +28,7 @@ export class Card {
   private english = element('p');
   private chinese = element('p', undefined, 'zh');
   private previousFocus = document.activeElement;
-  private resize = new ResizeObserver(() => this.position());
+  private resize = new ResizeObserver(() => this.schedulePosition());
   private frame: number | null = null;
 
   constructor(
@@ -59,6 +59,7 @@ export class Card {
     this.position();
     this.panel.focus({ preventScroll: true });
     this.resize.observe(this.panel);
+    this.resize.observe(this.title);
   }
   schedulePosition() {
     if (this.frame !== null) return;
@@ -72,15 +73,30 @@ export class Card {
     const rect = this.getAnchorRect();
     this.host.toggleAttribute('hidden', !rect);
     if (!rect) return;
-    const { width, height } = this.panel.getBoundingClientRect();
+    const panel = this.panel.getBoundingClientRect();
     const viewport = document.compatMode === 'BackCompat' ? document.body : document.documentElement;
     const { clientWidth, clientHeight } = viewport;
     const margin = 8, gap = 6;
-    const x = Math.max(margin, Math.min(rect.left, clientWidth - width - margin));
-    const below = rect.bottom + gap;
-    const y = below + height <= clientHeight - margin ? below : Math.max(margin, rect.top - height - gap);
+    const x = Math.max(margin, Math.min(rect.left, clientWidth - panel.width - margin));
+    const bottomInset = Math.max(margin, clientHeight - rect.top + gap);
+    const topInset = Math.max(margin, rect.bottom + gap);
+    const spaceAbove = clientHeight - bottomInset - margin;
+    const spaceBelow = clientHeight - topInset - margin;
+
+    // Measure where definitions start, even when the panel is scrolled internally.
+    const bodyStart = this.body.getBoundingClientRect().top - panel.top + this.panel.scrollTop;
+    const style = getComputedStyle(this.panel);
+    const lineHeight = parseFloat(style.lineHeight);
+    const bottomPadding = parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth);
+    const readableHeight = bodyStart + 2 * lineHeight + bottomPadding;
+    const above = spaceAbove >= readableHeight || spaceAbove >= spaceBelow;
+    // An oversized glyph can fill a short viewport. Keep one line available to scroll through.
+    const oneLine = parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + Math.floor(lineHeight) + bottomPadding;
+    const inset = Math.min(above ? bottomInset : topInset, Math.max(margin, clientHeight - margin - oneLine));
+    this.panel.style.maxHeight = Math.max(0, clientHeight - inset - margin) + 'px';
     this.host.style.setProperty('left', x + 'px', 'important');
-    this.host.style.setProperty('top', Math.min(y, Math.max(margin, clientHeight - height - margin)) + 'px', 'important');
+    this.host.style.setProperty('top', above ? 'auto' : inset + 'px', 'important');
+    this.host.style.setProperty('bottom', above ? inset + 'px' : 'auto', 'important');
   }
   private button(label: string, action: () => void) {
     const button = element('button', label);

@@ -1,10 +1,11 @@
 import { answer, envelope, expect, sample, test } from './fixture';
 import type { Locator, Route } from '@playwright/test';
 
-async function offsetFromWord(card: Locator, word: Locator) {
+async function offsetFromWord(card: Locator, word: Locator, side: 'above' | 'below') {
   const [panel, text] = await Promise.all([card.boundingBox(), word.boundingBox()]);
   if (!panel || !text) return null;
-  return [Math.round(panel.x - text.x), Math.round(panel.y - text.y - text.height)];
+  const gap = side === 'above' ? text.y - (panel.y + panel.height) : panel.y - (text.y + text.height);
+  return [Math.round(panel.x - text.x), Math.round(gap)];
 }
 
 test('link lookup waits for release, validates the request and renders a bilingual Shadow DOM card', async ({ reader: r }) => {
@@ -41,12 +42,12 @@ test('a Ctrl lookup follows the word on wheel scroll and keeps its pending reply
     await r.tap('#pitch', 2);
     await expect(r.card).toContainText('正在读取');
     await expect.poll(() => r.calls.length).toBe(1);
-    await expect.poll(() => offsetFromWord(r.card, word)).toEqual([0, 6]);
+    await expect.poll(() => offsetFromWord(r.card, word, 'above')).toEqual([0, 6]);
 
     await r.page.mouse.wheel(0, 45);
     await expect.poll(() => r.page.evaluate(() => scrollY)).toBeGreaterThan(30);
     await expect(r.card).toBeVisible();
-    await expect.poll(() => offsetFromWord(r.card, word)).toEqual([0, 6]);
+    await expect.poll(() => offsetFromWord(r.card, word, 'above')).toEqual([0, 6]);
 
     await r.page.mouse.wheel(0, 500);
     await expect.poll(() => word.evaluate(el => el.getBoundingClientRect().bottom)).toBeLessThan(0);
@@ -59,9 +60,41 @@ test('a Ctrl lookup follows the word on wheel scroll and keeps its pending reply
     await r.page.mouse.wheel(0, -700);
     await expect(r.card.locator('.zh')).toBeVisible();
     await r.page.setViewportSize({ width: 850, height: 640 });
-    await expect.poll(() => offsetFromWord(r.card, word)).toEqual([0, 6]);
+    await expect.poll(() => offsetFromWord(r.card, word, 'above')).toEqual([0, 6]);
     expect(r.calls).toHaveLength(1);
   } finally { release(); }
+});
+
+test('a long patches card leaves the next line clear and scrolls internally above the word', async ({ reader: r }) => {
+  await r.page.setViewportSize({ width: 800, height: 600 });
+  await r.open('<article style="padding-top:145px"><p>Open source has always said “<span id="word">patches</span> welcome”.</p>' +
+    '<p>Keep reading the next line.</p></article>');
+  r.respond = (route, call) => route.fulfill({ json: envelope({ ...answer(call.input),
+    meaning_en: 'Changes to software code that fix a problem or improve a program.',
+    meaning_zh: '为修复问题或改进程序而做的软件代码修改。',
+    note_en: 'The project welcomes contributions that improve its code. '.repeat(5)
+  }) });
+  await r.tap('#word');
+  const word = r.page.locator('#word'), panel = r.card.locator('article');
+  const above = () => offsetFromWord(r.card, word, 'above');
+  await expect(r.card.locator('.zh')).toHaveText('为修复问题或改进程序而做的软件代码修改。');
+  await expect.poll(above).toEqual([0, 6]);
+  await r.card.getByRole('button', { name: 'More' }).click();
+  await expect.poll(above).toEqual([0, 6]);
+  await expect.poll(() => panel.evaluate(el => Math.round(el.getBoundingClientRect().top))).toBe(8);
+  await panel.evaluate(el => { el.scrollTop = 0; });
+  await panel.hover();
+  await r.page.mouse.wheel(0, 60);
+  await expect.poll(() => panel.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  expect(await r.page.evaluate(() => scrollY)).toBe(0);
+  await expect.poll(above).toEqual([0, 6]);
+
+  await r.page.evaluate(() => scrollTo(0, 125));
+  await expect.poll(() => offsetFromWord(r.card, word, 'below')).toEqual([0, 6]);
+  await r.page.evaluate(() => scrollTo(0, 0));
+  await expect.poll(above).toEqual([0, 6]);
+  await expect(r.card.getByRole('button', { name: 'Less' })).toHaveAttribute('aria-expanded', 'true');
+  expect(r.calls).toHaveLength(1);
 });
 
 test('one open card scales, rewraps and stays anchored as the window resizes', async ({ reader: r }) => {
@@ -88,7 +121,7 @@ test('one open card scales, rewraps and stays anchored as the window resizes', a
   expect(narrow).toMatchObject({ width: 240, font: 14 });
   await r.page.setViewportSize({ width: 1000, height: 500 });
   await expect(panel).toHaveCSS('width', '320px');
-  await expect.poll(() => offsetFromWord(r.card, word)).toEqual([0, 6]);
+  await expect.poll(() => offsetFromWord(r.card, word, 'below')).toEqual([0, 6]);
 
   await r.page.setViewportSize({ width: 1800, height: 500 });
   const wide = await metrics();
@@ -99,15 +132,25 @@ test('one open card scales, rewraps and stays anchored as the window resizes', a
   expect(wide.padding).toBeGreaterThan(narrow.padding);
   await r.page.setViewportSize({ width: 480, height: 500 });
   await expect.poll(metrics).toEqual(narrow);
-  await expect.poll(() => offsetFromWord(r.card, word)).toEqual([0, 6]);
+  await expect.poll(() => offsetFromWord(r.card, word, 'below')).toEqual([0, 6]);
 
   await r.page.setViewportSize({ width: 220, height: 110 });
   await expect.poll(() => panel.evaluate(el => {
     const rect = el.getBoundingClientRect();
-    return [rect.left, rect.top, document.documentElement.clientWidth - rect.right, document.documentElement.clientHeight - rect.bottom];
-  })).toEqual([8, 8, 8, 8]);
+    const wordBottom = document.querySelector('#word')!.getBoundingClientRect().bottom;
+    return [rect.left, Math.round(rect.top - wordBottom), document.documentElement.clientWidth - rect.right, document.documentElement.clientHeight - rect.bottom];
+  })).toEqual([8, 6, 8, 8]);
   const scrollTop = await panel.evaluate(el => { el.scrollTop = el.scrollHeight; return el.scrollTop; });
   expect(scrollTop).toBeGreaterThan(0);
+
+  await word.evaluate(el => { el.style.cssText = 'position:fixed;top:0;left:8px;font:100px/1 Georgia'; });
+  await r.page.setViewportSize({ width: 221, height: 110 });
+  await expect.poll(() => panel.evaluate(el => {
+    const rect = el.getBoundingClientRect(), style = getComputedStyle(el);
+    const contentHeight = el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    return rect.top >= 7 && rect.bottom <= document.documentElement.clientHeight - 7
+      && contentHeight >= Math.floor(parseFloat(style.lineHeight));
+  })).toBe(true);
   expect(r.calls).toHaveLength(1);
 });
 
@@ -120,7 +163,7 @@ test('a lookup follows the pointed word fragment within a nested scroll containe
   await expect(r.card.locator('.zh')).toBeVisible();
   await r.page.mouse.wheel(60, 45);
   await expect.poll(() => pane.evaluate(el => [el.scrollLeft, el.scrollTop])).toEqual([60, 45]);
-  await expect.poll(() => offsetFromWord(r.card, part)).toEqual([0, 6]);
+  await expect.poll(() => offsetFromWord(r.card, part, 'above')).toEqual([0, 6]);
 
   await r.page.mouse.wheel(0, 195);
   await expect.poll(() => pane.evaluate(el => el.scrollTop)).toBe(240);
@@ -129,7 +172,7 @@ test('a lookup follows the pointed word fragment within a nested scroll containe
   await expect(r.card).toBeHidden();
   await pane.evaluate(el => el.scrollTo(30, 20));
   await expect(r.card.locator('.zh')).toBeVisible();
-  await expect.poll(() => offsetFromWord(r.card, part)).toEqual([0, 6]);
+  await expect.poll(() => offsetFromWord(r.card, part, 'above')).toEqual([0, 6]);
   expect(r.calls).toHaveLength(1);
 });
 
@@ -216,7 +259,7 @@ test('preceding sentence resolves This; insufficient context and different sense
   expect(r.calls).toHaveLength(5);
 });
 test('mouse selection alone is silent; menu command explains exact phrase', async ({ reader: r }) => {
-  await r.open('<article><p>We have to <span id="phrase">break the ice</span> before the meeting.</p></article>');
+  await r.open('<article style="padding-top:220px"><p>We have to <span id="phrase">break the ice</span> before the meeting.</p></article>');
   const b = (await r.page.locator('#phrase').boundingBox())!;
   const y = b.y + b.height / 2;
   await r.page.mouse.move(b.x, y); await r.page.mouse.down();
@@ -230,7 +273,7 @@ test('mouse selection alone is silent; menu command explains exact phrase', asyn
   expect(r.calls[0]!.input.selected_text).toBe('break the ice');
   await r.page.mouse.wheel(0, 25);
   await expect.poll(() => r.page.evaluate(() => scrollY)).toBeGreaterThan(0);
-  await expect.poll(() => offsetFromWord(r.card, r.page.locator('#phrase'))).toEqual([0, 6]);
+  await expect.poll(() => offsetFromWord(r.card, r.page.locator('#phrase'), 'above')).toEqual([0, 6]);
 });
 test('in-flight A cannot replace B, and closing or navigating invalidates pending results', async ({ reader: r }) => {
   const held: { release: () => void; route: Route }[] = [];
@@ -293,12 +336,16 @@ test('shows each validated line while the stream is open and only caches a succe
   await r.open();
   await r.tap('#right');
   await expect.poll(requests).toBe(1);
+  const offset = () => offsetFromWord(r.card, r.page.locator('#right'), 'above');
+  await expect.poll(offset).toEqual([0, 6]);
   await emit({ type: 'response.output_text.delta', delta: JSON.stringify(first).slice(0, -1) });
   await expect(r.card).toContainText(first.meaning_en);
+  await expect.poll(offset).toEqual([0, 6]);
   await expect(r.card.getByRole('heading')).toHaveText(first.target);
   await expect(r.card.locator('.zh')).toHaveCount(0);
   await emit({ type: 'response.output_text.delta', delta: ',"meaning_zh":' + JSON.stringify(final.meaning_zh) });
   await expect(r.card.locator('.zh')).toHaveText(final.meaning_zh);
+  await expect.poll(offset).toEqual([0, 6]);
   await expect(r.card.getByRole('button', { name: 'More' })).toHaveCount(0);
   await emit({ type: 'response.incomplete' });
   await expect(r.card).toContainText('没有返回完整释义');

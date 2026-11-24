@@ -367,7 +367,7 @@
   };
 
   // src/content/card.css
-  var card_default = ':host {\r\n  all: initial;\r\n  display: flex !important;\r\n  flex-direction: column !important;\r\n  position: fixed !important;\r\n  box-sizing: border-box !important;\r\n  inset: auto;\r\n  width: clamp(240px, 140px + 18vw, 420px) !important;\r\n  min-width: 0 !important;\r\n  max-width: calc(100% - 16px) !important;\r\n  height: auto !important;\r\n  max-height: calc(100% - 16px) !important;\r\n  padding: 0 !important;\r\n  margin: 0 !important;\r\n  border: 0 !important;\r\n  background: transparent !important;\r\n  overflow: visible !important;\r\n  z-index: 2147483647 !important;\r\n  color-scheme: light dark;\r\n}\r\n:host([hidden]) { display: none !important; }\r\n:host::backdrop { background: transparent; pointer-events: none; }\r\n* { box-sizing: border-box; }\r\narticle {\r\n  --paper: #fffcf6; --ink: #292824; --sub: #67645d; --line: #e8e1d6; --accent: #316057;\r\n  font: clamp(14px, 12px + 0.3vw, 17px)/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;\r\n  color: var(--ink); background: var(--paper); border: 1px solid var(--line);\r\n  border-radius: 1em; padding: 1em;\r\n  box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);\r\n  overflow-wrap: anywhere; overflow-y: auto;\r\n  min-height: 0; text-align: start; direction: ltr;\r\n  animation: enter 130ms ease-out;\r\n}\r\n@keyframes enter { from { opacity: 0; } to { opacity: 1; } }\r\n@media (prefers-reduced-motion: reduce) { article { animation: none; } }\r\n@media (prefers-color-scheme: dark) {\r\n  article { --paper: #292925; --ink: #f5f1e8; --sub: #c0bcb1; --line: #4b4b43; --accent: #acd7c2; }\r\n}\r\narticle:focus { outline: none; }\r\n.heading { display: flex; align-items: center; gap: .35em; margin-bottom: .45em; }\r\nh2 { font: 600 1.15em/1.32 "Segoe UI", system-ui, sans-serif; min-width: 0; margin: 0; color: var(--ink); }\r\np { margin: 0; }\r\n.zh, .status, .note { font-size: .94em; color: var(--sub); }\r\n.zh { margin-top: .38em; }\r\nbutton {\r\n  appearance: none; border: 0; border-radius: 4px; background: transparent; color: var(--accent);\r\n  font: 600 .86em/1.5 "Segoe UI", system-ui, sans-serif; padding: .25em .18em; margin-top: .65em; cursor: pointer;\r\n}\r\nbutton:hover { text-decoration: underline; }\r\nbutton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n.pronounce {\r\n  flex: none; display: grid; place-items: center; width: 1.85em; height: 1.85em;\r\n  font-size: 1em; margin: 0; padding: 0; border-radius: 50%;\r\n}\r\n.pronounce:hover, .pronounce[aria-disabled="true"] { background: var(--line); }\r\n.pronounce[aria-disabled="true"] { cursor: default; }\r\n.pronounce svg {\r\n  width: 1.2em; height: 1.2em; fill: none; stroke: currentColor;\r\n  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;\r\n}\r\n@media (pointer: coarse) { .pronounce { min-width: 44px; min-height: 44px; } }\r\n.speech-message:empty { display: none; }\r\n.speech-message { margin-bottom: .4em; }\r\n.note { margin-top: .45em; padding-top: .6em; border-top: 1px solid var(--line); }\r\n';
+  var card_default = ':host {\n  all: initial;\n  display: flex !important;\n  flex-direction: column !important;\n  position: fixed !important;\n  box-sizing: border-box !important;\n  inset: auto;\n  width: clamp(240px, 140px + 18vw, 420px) !important;\n  min-width: 0 !important;\n  max-width: calc(100% - 16px) !important;\n  height: auto !important;\n  max-height: calc(100% - 16px) !important;\n  padding: 0 !important;\n  margin: 0 !important;\n  border: 0 !important;\n  background: transparent !important;\n  overflow: visible !important;\n  z-index: 2147483647 !important;\n  color-scheme: light dark;\n}\n:host([hidden]) { display: none !important; }\n:host::backdrop { background: transparent; pointer-events: none; }\n* { box-sizing: border-box; }\narticle {\n  --paper: #fffcf6; --ink: #292824; --sub: #67645d; --line: #e8e1d6; --accent: #316057;\n  font: clamp(14px, 12px + 0.3vw, 17px)/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;\n  color: var(--ink); background: var(--paper); border: 1px solid var(--line);\n  border-radius: 1em; padding: 1em;\n  box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);\n  overflow-wrap: anywhere; overflow-y: auto; scrollbar-gutter: stable;\n  min-height: 0; text-align: start; direction: ltr;\n  animation: enter 130ms ease-out;\n}\n@keyframes enter { from { opacity: 0; } to { opacity: 1; } }\n@media (prefers-reduced-motion: reduce) { article { animation: none; } }\n@media (prefers-color-scheme: dark) {\n  article { --paper: #292925; --ink: #f5f1e8; --sub: #c0bcb1; --line: #4b4b43; --accent: #acd7c2; }\n}\narticle:focus { outline: none; }\n.heading { display: flex; align-items: center; gap: .35em; margin-bottom: .45em; }\nh2 { font: 600 1.15em/1.32 "Segoe UI", system-ui, sans-serif; min-width: 0; margin: 0; color: var(--ink); }\np { margin: 0; }\n.zh, .status, .note { font-size: .94em; color: var(--sub); }\n.zh { margin-top: .38em; }\nbutton {\n  appearance: none; border: 0; border-radius: 4px; background: transparent; color: var(--accent);\n  font: 600 .86em/1.5 "Segoe UI", system-ui, sans-serif; padding: .25em .18em; margin-top: .65em; cursor: pointer;\n}\nbutton:hover { text-decoration: underline; }\nbutton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n.pronounce {\n  flex: none; display: grid; place-items: center; width: 1.85em; height: 1.85em;\n  font-size: 1em; margin: 0; padding: 0; border-radius: 50%;\n}\n.pronounce:hover, .pronounce[aria-disabled="true"] { background: var(--line); }\n.pronounce[aria-disabled="true"] { cursor: default; }\n.pronounce svg {\n  width: 1.2em; height: 1.2em; fill: none; stroke: currentColor;\n  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;\n}\n@media (pointer: coarse) { .pronounce { min-width: 44px; min-height: 44px; } }\n.speech-message:empty { display: none; }\n.speech-message { margin-bottom: .4em; }\n.note { margin-top: .45em; padding-top: .6em; border-top: 1px solid var(--line); }\n';
 
   // src/content/card.ts
   var messages = {
@@ -423,6 +423,7 @@
       this.position();
       this.panel.focus({ preventScroll: true });
       this.resize.observe(this.panel);
+      this.resize.observe(this.title);
     }
     getAnchorRect;
     target;
@@ -437,7 +438,7 @@
     english = element("p");
     chinese = element("p", void 0, "zh");
     previousFocus = document.activeElement;
-    resize = new ResizeObserver(() => this.position());
+    resize = new ResizeObserver(() => this.schedulePosition());
     frame = null;
     schedulePosition() {
       if (this.frame !== null) return;
@@ -451,15 +452,27 @@
       const rect = this.getAnchorRect();
       this.host.toggleAttribute("hidden", !rect);
       if (!rect) return;
-      const { width, height } = this.panel.getBoundingClientRect();
+      const panel = this.panel.getBoundingClientRect();
       const viewport = document.compatMode === "BackCompat" ? document.body : document.documentElement;
       const { clientWidth, clientHeight } = viewport;
       const margin = 8, gap = 6;
-      const x = Math.max(margin, Math.min(rect.left, clientWidth - width - margin));
-      const below = rect.bottom + gap;
-      const y = below + height <= clientHeight - margin ? below : Math.max(margin, rect.top - height - gap);
+      const x = Math.max(margin, Math.min(rect.left, clientWidth - panel.width - margin));
+      const bottomInset = Math.max(margin, clientHeight - rect.top + gap);
+      const topInset = Math.max(margin, rect.bottom + gap);
+      const spaceAbove = clientHeight - bottomInset - margin;
+      const spaceBelow = clientHeight - topInset - margin;
+      const bodyStart = this.body.getBoundingClientRect().top - panel.top + this.panel.scrollTop;
+      const style = getComputedStyle(this.panel);
+      const lineHeight = parseFloat(style.lineHeight);
+      const bottomPadding = parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth);
+      const readableHeight = bodyStart + 2 * lineHeight + bottomPadding;
+      const above = spaceAbove >= readableHeight || spaceAbove >= spaceBelow;
+      const oneLine = parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + Math.floor(lineHeight) + bottomPadding;
+      const inset = Math.min(above ? bottomInset : topInset, Math.max(margin, clientHeight - margin - oneLine));
+      this.panel.style.maxHeight = Math.max(0, clientHeight - inset - margin) + "px";
       this.host.style.setProperty("left", x + "px", "important");
-      this.host.style.setProperty("top", Math.min(y, Math.max(margin, clientHeight - height - margin)) + "px", "important");
+      this.host.style.setProperty("top", above ? "auto" : inset + "px", "important");
+      this.host.style.setProperty("bottom", above ? inset + "px" : "auto", "important");
     }
     button(label, action) {
       const button = element("button", label);
