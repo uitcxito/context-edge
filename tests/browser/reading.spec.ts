@@ -167,6 +167,8 @@ test('cross-tag word; sentence and shortest necessary phrase; keyboard More and 
   await expect(r.card.locator('h2')).toHaveText('earn the right to get there');
   const more = r.card.getByRole('button', { name: 'More' });
   await r.page.keyboard.press('Tab');
+  await expect(r.card.getByRole('button', { name: '朗读 earn the right to get there' })).toBeFocused();
+  await r.page.keyboard.press('Tab');
   await expect(more).toBeFocused();
   await r.page.keyboard.press('Enter');
   await expect(r.card.locator('.note')).toBeVisible();

@@ -1,5 +1,6 @@
 import { type ErrorCode, type ExplanationPreview, type Reply } from '../shared';
 import { HOST } from './dom';
+import { PronunciationButton } from './pronunciation';
 import css from './card.css';
 
 const messages: Record<ErrorCode, string> = {
@@ -22,6 +23,7 @@ export class Card {
   private shadow = this.host.attachShadow({ mode: 'open' });
   private panel = element('article');
   private title = element('h2');
+  private pronunciation = new PronunciationButton();
   private body = element('div');
   private english = element('p');
   private chinese = element('p', undefined, 'zh');
@@ -43,12 +45,14 @@ export class Card {
     this.panel.tabIndex = -1;
     this.panel.setAttribute('role', 'region');
     this.panel.setAttribute('aria-label', 'Context 词义');
-    this.title.textContent = target;
+    this.setTitle(target);
     this.title.lang = 'en';
     this.english.lang = 'en';
     this.body.setAttribute('aria-live', 'polite');
     this.body.append(element('p', '正在读取语境…', 'status'));
-    this.panel.append(this.title, this.body);
+    const heading = element('div', undefined, 'heading');
+    heading.append(this.title, this.pronunciation.button);
+    this.panel.append(heading, this.pronunciation.message, this.body);
     this.shadow.append(this.panel);
     document.documentElement.append(this.host);
     this.host.showPopover();
@@ -84,8 +88,12 @@ export class Card {
     button.addEventListener('click', e => { if (e.isTrusted) action(); });
     return button;
   }
-  showMeanings({ target, meaning_en, meaning_zh }: ExplanationPreview) {
+  private setTitle(target: string) {
     if (this.title.textContent !== target) this.title.textContent = target;
+    this.pronunciation.setTarget(target);
+  }
+  showMeanings({ target, meaning_en, meaning_zh }: ExplanationPreview) {
+    this.setTitle(target);
     if (this.english.textContent !== meaning_en) this.english.textContent = meaning_en;
     if (!this.english.parentNode) this.body.replaceChildren(this.english);
     if (meaning_zh && this.chinese.textContent !== meaning_zh) {
@@ -95,7 +103,7 @@ export class Card {
   }
   show(reply: Reply) {
     if (!reply.ok) {
-      this.title.textContent = this.target;
+      this.setTitle(this.target);
       this.body.replaceChildren(element('p', messages[reply.error], 'status'));
       if (['noKey', 'badKey', 'forbidden', 'model', 'settings'].includes(reply.error)) {
         this.body.append(this.button('打开设置', this.settings));
@@ -105,7 +113,7 @@ export class Card {
     } else {
       const ex = reply.explanation;
       if (ex.status === 'unclear') {
-        this.title.textContent = ex.target;
+        this.setTitle(ex.target);
         this.body.replaceChildren(element('p', '这段上下文不足以确定含义。', 'status'));
       } else {
         this.showMeanings(ex);
@@ -132,6 +140,7 @@ export class Card {
   remove() {
     if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.resize.disconnect();
+    this.pronunciation.dispose();
     const restore = this.host === document.activeElement && this.previousFocus instanceof HTMLElement && this.previousFocus.isConnected;
     this.host.remove();
     if (restore) (this.previousFocus as HTMLElement).focus({ preventScroll: true });

@@ -263,8 +263,111 @@
     return fragmentRect(range) ? makeAnchor(root, block, from, to, range, first.node) : null;
   }
 
+  // src/content/pronunciation.ts
+  var unavailable = "暂时无法播放发音，请重试。";
+  var isEnglish = (voice) => /^en(?:[-_]|$)/i.test(voice.lang);
+  async function availableVoices(synth) {
+    const ready = (list) => list.some(isEnglish) && list.some((voice) => voice.localService);
+    const voices = synth.getVoices();
+    if (ready(voices)) return voices;
+    await new Promise((resolve) => {
+      function finish() {
+        clearTimeout(timer);
+        synth.removeEventListener("voiceschanged", changed);
+        resolve();
+      }
+      function changed() {
+        if (ready(synth.getVoices())) finish();
+      }
+      const timer = window.setTimeout(finish, 500);
+      synth.addEventListener("voiceschanged", changed);
+    });
+    return synth.getVoices();
+  }
+  function speakerIcon() {
+    const ns = "http://www.w3.org/2000/svg";
+    const icon = document.createElementNS(ns, "svg");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", "M11 5 6 9H3v6h3l5 4V5ZM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14");
+    icon.append(path);
+    return icon;
+  }
+  var PronunciationButton = class {
+    button = document.createElement("button");
+    message = document.createElement("p");
+    target = "";
+    active = null;
+    constructor() {
+      this.button.type = "button";
+      this.button.className = "pronounce";
+      this.button.append(speakerIcon());
+      this.button.addEventListener("click", (event) => {
+        if (event.isTrusted) void this.play();
+      });
+      this.message.className = "speech-message status";
+      this.message.setAttribute("role", "status");
+    }
+    setTarget(target) {
+      if (this.target === target) return;
+      this.target = target;
+      this.button.title = "朗读 " + target;
+      this.button.setAttribute("aria-label", this.button.title);
+      this.message.textContent = "";
+      this.updateButton();
+    }
+    updateButton() {
+      this.button.setAttribute("aria-disabled", String(this.active?.text === this.target));
+    }
+    async play() {
+      const target = this.target;
+      if (this.active?.text === target) return;
+      this.message.textContent = "";
+      const synth = window.speechSynthesis;
+      if (!synth || typeof SpeechSynthesisUtterance !== "function") {
+        this.message.textContent = "此浏览器未提供语音播放功能。";
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(target);
+      this.active = utterance;
+      this.updateButton();
+      const finish = (message = "") => {
+        if (this.active !== utterance) return;
+        this.active = null;
+        this.updateButton();
+        if (this.target === target) this.message.textContent = message;
+      };
+      try {
+        const voices = await availableVoices(synth);
+        if (this.active !== utterance) return;
+        const english = voices.filter(isEnglish);
+        const american = english.filter((voice2) => /[-_]US(?:[-_]|$)/i.test(voice2.lang));
+        const voice = american.find((voice2) => voice2.localService) ?? english.find((voice2) => voice2.localService) ?? american[0] ?? english[0];
+        if (voices.length && !voice) {
+          finish("未找到英语语音，请在系统设置中添加。");
+          return;
+        }
+        if (voice) utterance.voice = voice;
+        utterance.lang = voice?.lang.replaceAll("_", "-") ?? "en-US";
+        utterance.onend = () => finish();
+        utterance.onerror = () => finish(unavailable);
+        synth.speak(utterance);
+      } catch {
+        finish(unavailable);
+      }
+    }
+    dispose() {
+      if (this.active) {
+        this.active.onend = null;
+        this.active.onerror = null;
+        this.active = null;
+      }
+    }
+  };
+
   // src/content/card.css
-  var card_default = ':host {\r\n  all: initial;\r\n  display: flex !important;\r\n  flex-direction: column !important;\r\n  position: fixed !important;\r\n  box-sizing: border-box !important;\r\n  inset: auto;\r\n  width: clamp(240px, 140px + 18vw, 420px) !important;\r\n  min-width: 0 !important;\r\n  max-width: calc(100% - 16px) !important;\r\n  height: auto !important;\r\n  max-height: calc(100% - 16px) !important;\r\n  padding: 0 !important;\r\n  margin: 0 !important;\r\n  border: 0 !important;\r\n  background: transparent !important;\r\n  overflow: visible !important;\r\n  z-index: 2147483647 !important;\r\n  color-scheme: light dark;\r\n}\r\n:host([hidden]) { display: none !important; }\r\n:host::backdrop { background: transparent; pointer-events: none; }\r\n* { box-sizing: border-box; }\r\narticle {\r\n  --paper: #fffcf6; --ink: #292824; --sub: #67645d; --line: #e8e1d6; --accent: #316057;\r\n  font: clamp(14px, 12px + 0.3vw, 17px)/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;\r\n  color: var(--ink); background: var(--paper); border: 1px solid var(--line);\r\n  border-radius: 1em; padding: 1em;\r\n  box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);\r\n  overflow-wrap: anywhere; overflow-y: auto;\r\n  min-height: 0; text-align: start; direction: ltr;\r\n  animation: enter 130ms ease-out;\r\n}\r\n@keyframes enter { from { opacity: 0; } to { opacity: 1; } }\r\n@media (prefers-reduced-motion: reduce) { article { animation: none; } }\r\n@media (prefers-color-scheme: dark) {\r\n  article { --paper: #292925; --ink: #f5f1e8; --sub: #c0bcb1; --line: #4b4b43; --accent: #acd7c2; }\r\n}\r\narticle:focus { outline: none; }\r\nh2 { font: 600 1.15em/1.32 "Segoe UI", system-ui, sans-serif; margin: 0 0 .45em; color: var(--ink); }\r\np { margin: 0; }\r\n.zh, .status, .note { font-size: .94em; color: var(--sub); }\r\n.zh { margin-top: .38em; }\r\nbutton {\r\n  appearance: none; border: 0; border-radius: 4px; background: transparent; color: var(--accent);\r\n  font: 600 .86em/1.5 "Segoe UI", system-ui, sans-serif; padding: .25em .18em; margin-top: .65em; cursor: pointer;\r\n}\r\nbutton:hover { text-decoration: underline; }\r\nbutton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n.note { margin-top: .45em; padding-top: .6em; border-top: 1px solid var(--line); }\r\n';
+  var card_default = ':host {\r\n  all: initial;\r\n  display: flex !important;\r\n  flex-direction: column !important;\r\n  position: fixed !important;\r\n  box-sizing: border-box !important;\r\n  inset: auto;\r\n  width: clamp(240px, 140px + 18vw, 420px) !important;\r\n  min-width: 0 !important;\r\n  max-width: calc(100% - 16px) !important;\r\n  height: auto !important;\r\n  max-height: calc(100% - 16px) !important;\r\n  padding: 0 !important;\r\n  margin: 0 !important;\r\n  border: 0 !important;\r\n  background: transparent !important;\r\n  overflow: visible !important;\r\n  z-index: 2147483647 !important;\r\n  color-scheme: light dark;\r\n}\r\n:host([hidden]) { display: none !important; }\r\n:host::backdrop { background: transparent; pointer-events: none; }\r\n* { box-sizing: border-box; }\r\narticle {\r\n  --paper: #fffcf6; --ink: #292824; --sub: #67645d; --line: #e8e1d6; --accent: #316057;\r\n  font: clamp(14px, 12px + 0.3vw, 17px)/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;\r\n  color: var(--ink); background: var(--paper); border: 1px solid var(--line);\r\n  border-radius: 1em; padding: 1em;\r\n  box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);\r\n  overflow-wrap: anywhere; overflow-y: auto;\r\n  min-height: 0; text-align: start; direction: ltr;\r\n  animation: enter 130ms ease-out;\r\n}\r\n@keyframes enter { from { opacity: 0; } to { opacity: 1; } }\r\n@media (prefers-reduced-motion: reduce) { article { animation: none; } }\r\n@media (prefers-color-scheme: dark) {\r\n  article { --paper: #292925; --ink: #f5f1e8; --sub: #c0bcb1; --line: #4b4b43; --accent: #acd7c2; }\r\n}\r\narticle:focus { outline: none; }\r\n.heading { display: flex; align-items: center; gap: .35em; margin-bottom: .45em; }\r\nh2 { font: 600 1.15em/1.32 "Segoe UI", system-ui, sans-serif; min-width: 0; margin: 0; color: var(--ink); }\r\np { margin: 0; }\r\n.zh, .status, .note { font-size: .94em; color: var(--sub); }\r\n.zh { margin-top: .38em; }\r\nbutton {\r\n  appearance: none; border: 0; border-radius: 4px; background: transparent; color: var(--accent);\r\n  font: 600 .86em/1.5 "Segoe UI", system-ui, sans-serif; padding: .25em .18em; margin-top: .65em; cursor: pointer;\r\n}\r\nbutton:hover { text-decoration: underline; }\r\nbutton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n.pronounce {\r\n  flex: none; display: grid; place-items: center; width: 1.85em; height: 1.85em;\r\n  font-size: 1em; margin: 0; padding: 0; border-radius: 50%;\r\n}\r\n.pronounce:hover, .pronounce[aria-disabled="true"] { background: var(--line); }\r\n.pronounce[aria-disabled="true"] { cursor: default; }\r\n.pronounce svg {\r\n  width: 1.2em; height: 1.2em; fill: none; stroke: currentColor;\r\n  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;\r\n}\r\n@media (pointer: coarse) { .pronounce { min-width: 44px; min-height: 44px; } }\r\n.speech-message:empty { display: none; }\r\n.speech-message { margin-bottom: .4em; }\r\n.note { margin-top: .45em; padding-top: .6em; border-top: 1px solid var(--line); }\r\n';
 
   // src/content/card.ts
   var messages = {
@@ -306,12 +409,14 @@
       this.panel.tabIndex = -1;
       this.panel.setAttribute("role", "region");
       this.panel.setAttribute("aria-label", "Context 词义");
-      this.title.textContent = target;
+      this.setTitle(target);
       this.title.lang = "en";
       this.english.lang = "en";
       this.body.setAttribute("aria-live", "polite");
       this.body.append(element("p", "正在读取语境…", "status"));
-      this.panel.append(this.title, this.body);
+      const heading = element("div", void 0, "heading");
+      heading.append(this.title, this.pronunciation.button);
+      this.panel.append(heading, this.pronunciation.message, this.body);
       this.shadow.append(this.panel);
       document.documentElement.append(this.host);
       this.host.showPopover();
@@ -327,6 +432,7 @@
     shadow = this.host.attachShadow({ mode: "open" });
     panel = element("article");
     title = element("h2");
+    pronunciation = new PronunciationButton();
     body = element("div");
     english = element("p");
     chinese = element("p", void 0, "zh");
@@ -363,8 +469,12 @@
       });
       return button;
     }
-    showMeanings({ target, meaning_en, meaning_zh }) {
+    setTitle(target) {
       if (this.title.textContent !== target) this.title.textContent = target;
+      this.pronunciation.setTarget(target);
+    }
+    showMeanings({ target, meaning_en, meaning_zh }) {
+      this.setTitle(target);
       if (this.english.textContent !== meaning_en) this.english.textContent = meaning_en;
       if (!this.english.parentNode) this.body.replaceChildren(this.english);
       if (meaning_zh && this.chinese.textContent !== meaning_zh) {
@@ -374,7 +484,7 @@
     }
     show(reply) {
       if (!reply.ok) {
-        this.title.textContent = this.target;
+        this.setTitle(this.target);
         this.body.replaceChildren(element("p", messages[reply.error], "status"));
         if (["noKey", "badKey", "forbidden", "model", "settings"].includes(reply.error)) {
           this.body.append(this.button("打开设置", this.settings));
@@ -384,7 +494,7 @@
       } else {
         const ex = reply.explanation;
         if (ex.status === "unclear") {
-          this.title.textContent = ex.target;
+          this.setTitle(ex.target);
           this.body.replaceChildren(element("p", "这段上下文不足以确定含义。", "status"));
         } else {
           this.showMeanings(ex);
@@ -411,6 +521,7 @@
     remove() {
       if (this.frame !== null) cancelAnimationFrame(this.frame);
       this.resize.disconnect();
+      this.pronunciation.dispose();
       const restore = this.host === document.activeElement && this.previousFocus instanceof HTMLElement && this.previousFocus.isConnected;
       this.host.remove();
       if (restore) this.previousFocus.focus({ preventScroll: true });
