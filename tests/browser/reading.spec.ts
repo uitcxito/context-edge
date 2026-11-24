@@ -64,6 +64,53 @@ test('a Ctrl lookup follows the word on wheel scroll and keeps its pending reply
   } finally { release(); }
 });
 
+test('one open card scales, rewraps and stays anchored as the window resizes', async ({ reader: r }) => {
+  await r.page.setViewportSize({ width: 480, height: 500 });
+  await r.open('<p style="position:fixed;top:16px;left:16px">Her <b id="word">sabbatical</b> starts soon.</p>');
+  r.respond = (route, call) => route.fulfill({ json: envelope({ ...answer(call.input),
+    meaning_en: 'A planned break from regular work to rest, study, or spend time on a personal project.'
+  }) });
+  await r.tap('#word');
+  await expect(r.card.locator('.zh')).toBeVisible();
+  const panel = r.card.locator('article'), word = r.page.locator('#word');
+  const metrics = () => panel.evaluate(el => {
+    const english = el.querySelector('p[lang="en"]')!;
+    const range = new Range();
+    range.selectNodeContents(english);
+    return {
+      width: el.getBoundingClientRect().width, lines: range.getClientRects().length,
+      font: parseFloat(getComputedStyle(english).fontSize), padding: parseFloat(getComputedStyle(el).paddingLeft),
+      title: parseFloat(getComputedStyle(el.querySelector('h2')!).fontSize),
+      chinese: parseFloat(getComputedStyle(el.querySelector('.zh')!).fontSize)
+    };
+  });
+  const narrow = await metrics();
+  expect(narrow).toMatchObject({ width: 240, font: 14 });
+  await r.page.setViewportSize({ width: 1000, height: 500 });
+  await expect(panel).toHaveCSS('width', '320px');
+  await expect.poll(() => offsetFromWord(r.card, word)).toEqual([0, 6]);
+
+  await r.page.setViewportSize({ width: 1800, height: 500 });
+  const wide = await metrics();
+  expect(wide).toMatchObject({ width: 420, font: 17 });
+  expect(wide.lines).toBeLessThan(narrow.lines);
+  expect(wide.title).toBeGreaterThan(narrow.title);
+  expect(wide.chinese).toBeGreaterThan(narrow.chinese);
+  expect(wide.padding).toBeGreaterThan(narrow.padding);
+  await r.page.setViewportSize({ width: 480, height: 500 });
+  await expect.poll(metrics).toEqual(narrow);
+  await expect.poll(() => offsetFromWord(r.card, word)).toEqual([0, 6]);
+
+  await r.page.setViewportSize({ width: 220, height: 110 });
+  await expect.poll(() => panel.evaluate(el => {
+    const rect = el.getBoundingClientRect();
+    return [rect.left, rect.top, document.documentElement.clientWidth - rect.right, document.documentElement.clientHeight - rect.bottom];
+  })).toEqual([8, 8, 8, 8]);
+  const scrollTop = await panel.evaluate(el => { el.scrollTop = el.scrollHeight; return el.scrollTop; });
+  expect(scrollTop).toBeGreaterThan(0);
+  expect(r.calls).toHaveLength(1);
+});
+
 test('a lookup follows the pointed word fragment within a nested scroll container', async ({ reader: r }) => {
   await r.open('<section id="pane" style="margin:180px 0 0 160px;width:500px;height:200px;overflow:auto">' +
     '<div style="width:900px;height:800px;padding:110px 0 0 140px"><p>They are fund<strong id="part">raising</strong> abroad.</p></div></section>');

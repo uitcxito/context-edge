@@ -69,12 +69,14 @@ export class Card {
     this.host.toggleAttribute('hidden', !rect);
     if (!rect) return;
     const { width, height } = this.panel.getBoundingClientRect();
+    const viewport = document.compatMode === 'BackCompat' ? document.body : document.documentElement;
+    const { clientWidth, clientHeight } = viewport;
     const margin = 8, gap = 6;
-    const x = Math.max(margin, Math.min(rect.left, innerWidth - width - margin));
+    const x = Math.max(margin, Math.min(rect.left, clientWidth - width - margin));
     const below = rect.bottom + gap;
-    const y = below + height <= innerHeight - margin ? below : Math.max(margin, rect.top - height - gap);
+    const y = below + height <= clientHeight - margin ? below : Math.max(margin, rect.top - height - gap);
     this.host.style.setProperty('left', x + 'px', 'important');
-    this.host.style.setProperty('top', Math.min(y, Math.max(margin, innerHeight - height - margin)) + 'px', 'important');
+    this.host.style.setProperty('top', Math.min(y, Math.max(margin, clientHeight - height - margin)) + 'px', 'important');
   }
   private button(label: string, action: () => void) {
     const button = element('button', label);
