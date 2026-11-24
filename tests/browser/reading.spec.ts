@@ -97,9 +97,9 @@ test('a long patches card leaves the next line clear and scrolls internally abov
   expect(r.calls).toHaveLength(1);
 });
 
-test('one open card scales, rewraps and stays anchored as the window resizes', async ({ reader: r }) => {
-  await r.page.setViewportSize({ width: 480, height: 500 });
-  await r.open('<p style="position:fixed;top:16px;left:16px">Her <b id="word">sabbatical</b> starts soon.</p>');
+test('resizing the window only narrows the card when it runs out of space', async ({ reader: r }) => {
+  await r.page.setViewportSize({ width: 520, height: 500 });
+  await r.open('<p style="position:fixed;top:4px;left:16px">Her <b id="word">sabbatical</b> starts soon.</p>');
   r.respond = (route, call) => route.fulfill({ json: envelope({ ...answer(call.input),
     meaning_en: 'A planned break from regular work to rest, study, or spend time on a personal project.'
   }) });
@@ -117,22 +117,13 @@ test('one open card scales, rewraps and stays anchored as the window resizes', a
       chinese: parseFloat(getComputedStyle(el.querySelector('.zh')!).fontSize)
     };
   });
-  const narrow = await metrics();
-  expect(narrow).toMatchObject({ width: 240, font: 14 });
-  await r.page.setViewportSize({ width: 1000, height: 500 });
-  await expect(panel).toHaveCSS('width', '320px');
-  await expect.poll(() => offsetFromWord(r.card, word, 'below')).toEqual([0, 6]);
-
-  await r.page.setViewportSize({ width: 1800, height: 500 });
-  const wide = await metrics();
-  expect(wide).toMatchObject({ width: 420, font: 17 });
-  expect(wide.lines).toBeLessThan(narrow.lines);
-  expect(wide.title).toBeGreaterThan(narrow.title);
-  expect(wide.chinese).toBeGreaterThan(narrow.chinese);
-  expect(wide.padding).toBeGreaterThan(narrow.padding);
-  await r.page.setViewportSize({ width: 480, height: 500 });
-  await expect.poll(metrics).toEqual(narrow);
-  await expect.poll(() => offsetFromWord(r.card, word, 'below')).toEqual([0, 6]);
+  const normal = await metrics();
+  expect(normal).toMatchObject({ width: 420, font: 17, padding: 17 });
+  for (const width of [1000, 1800, 520]) {
+    await r.page.setViewportSize({ width, height: 500 });
+    await expect.poll(metrics).toEqual(normal);
+    await expect.poll(() => offsetFromWord(r.card, word, 'below')).toEqual([0, 6]);
+  }
 
   await r.page.setViewportSize({ width: 220, height: 110 });
   await expect.poll(() => panel.evaluate(el => {
@@ -140,6 +131,9 @@ test('one open card scales, rewraps and stays anchored as the window resizes', a
     const wordBottom = document.querySelector('#word')!.getBoundingClientRect().bottom;
     return [rect.left, Math.round(rect.top - wordBottom), document.documentElement.clientWidth - rect.right, document.documentElement.clientHeight - rect.bottom];
   })).toEqual([8, 6, 8, 8]);
+  const narrow = await metrics();
+  expect(narrow.font).toBe(normal.font);
+  expect(narrow.lines).toBeGreaterThan(normal.lines);
   const scrollTop = await panel.evaluate(el => { el.scrollTop = el.scrollHeight; return el.scrollTop; });
   expect(scrollTop).toBeGreaterThan(0);
 
@@ -151,6 +145,47 @@ test('one open card scales, rewraps and stays anchored as the window resizes', a
     return rect.top >= 7 && rect.bottom <= document.documentElement.clientHeight - 7
       && contentHeight >= Math.floor(parseFloat(style.lineHeight));
   })).toBe(true);
+  expect(r.calls).toHaveLength(1);
+});
+
+test('an existing tab zoom and subsequent zoom changes size the same open card', async ({ reader: r }) => {
+  await r.open('<p style="position:fixed;top:50%;left:24px">Show how you earn the <b id="word">right</b> to get there.</p>');
+  const dprAt100 = await r.page.evaluate(() => devicePixelRatio);
+  const tabId = await r.worker.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0]!.id!);
+  const setZoom = (zoom: number) => r.worker.evaluate(({ tabId, zoom }) => chrome.tabs.setZoom(tabId, zoom), { tabId, zoom });
+  await setZoom(1.25);
+  // A fresh content script must read the saved page zoom before its first lookup.
+  await r.page.reload();
+  await r.page.locator('#word').hover();
+  await r.page.keyboard.press('ControlLeft');
+  const panel = r.card.locator('article');
+  await expect(r.card.locator('.zh')).toBeVisible();
+  await r.card.getByRole('button', { name: 'More' }).click();
+  const opened = await panel.elementHandle();
+
+  const metrics = () => panel.evaluate((el, originalDpr) => {
+    const zoom = devicePixelRatio / originalDpr;
+    const style = getComputedStyle(el);
+    const box = el.getBoundingClientRect();
+    const word = document.querySelector('#word')!.getBoundingClientRect();
+    const speaker = el.querySelector('.pronounce')!.getBoundingClientRect();
+    const visualSize = (css: string) => Math.round(parseFloat(css) * zoom * 10) / 10;
+    return {
+      percent: Math.round(zoom * 100), width: Math.round(box.width * zoom),
+      font: visualSize(style.fontSize), padding: visualSize(style.paddingTop),
+      speaker: Math.round(speaker.width * zoom), aboveGap: Math.round(word.top - box.bottom)
+    };
+  }, dprAt100);
+  const expectSize = (percent: number, width: number, font: number) =>
+    expect.poll(metrics).toEqual({ percent, width, font, padding: font, speaker: Math.round(font * 1.85), aboveGap: 6 });
+  await expectSize(125, 462, 18.7);
+  for (const [percent, width, font] of [[150, 504, 20.4], [200, 504, 20.4], [110, 437, 17.7], [80, 336, 13.6], [100, 420, 17]] as const) {
+    await setZoom(percent / 100);
+    await expectSize(percent, width, font);
+  }
+  expect(await opened!.evaluate(el => el.isConnected)).toBe(true);
+  await expect(r.card.getByRole('button', { name: 'Less' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(r.card.getByRole('button', { name: '朗读 earn the right to get there' })).toBeEnabled();
   expect(r.calls).toHaveLength(1);
 });
 

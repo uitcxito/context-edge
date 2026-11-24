@@ -9,6 +9,7 @@ let point: { x: number; y: number } | null = null;
 let buttons = 0;
 let enabled = false;
 let stateVersion = 0;
+let pageZoom: number | undefined;
 let menuRange: Range | null = null;
 let current: { id: string; card: Card; observer: MutationObserver; pending: boolean } | null = null;
 async function send<T>(message: ClientMessage): Promise<T> {
@@ -33,16 +34,23 @@ function reset() {
 async function refresh() {
   const version = ++stateVersion;
   enabled = false;
+  pageZoom = undefined;
   closeCard();
-  const state = await send<boolean>({ type: 'state' }).catch(() => false);
-  if (version === stateVersion) enabled = state === true;
+  const [state, initialZoom] = await Promise.all([
+    send<boolean>({ type: 'state' }).catch(() => false),
+    send<number>({ type: 'getZoom' }).catch(() => 1)
+  ]);
+  if (version !== stateVersion) return;
+  // A zoom event received during initialization is newer than the snapshot.
+  pageZoom ??= initialZoom;
+  enabled = state === true;
 }
 function lookup(anchor: Anchor) {
   if (!enabled || !anchor.root.isConnected || anchor.range.collapsed) return;
   closeCard();
   const id = cryptoId();
   const page = location.href;
-  const card = new Card(anchor.getRect, anchor.reading.selected, () => lookup(anchor), () => {
+  const card = new Card(anchor.getRect, anchor.reading.selected, pageZoom ?? 1, () => lookup(anchor), () => {
     void send({ type: 'options' }).catch(() => undefined);
   });
   const observer = new MutationObserver(records => {
@@ -105,6 +113,12 @@ chrome.runtime.onMessage.addListener((msg: WorkerMessage, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return;
   if (msg?.type === 'site') { respond(location.hostname); return; }
   if (msg?.type === 'refresh') { void refresh(); return; }
+  if (msg?.type === 'zoomChanged') {
+    tap.cancel();
+    pageZoom = msg.factor;
+    current?.card.setPageZoom(pageZoom);
+    return;
+  }
   if (msg?.type === 'preview' && current?.pending && current.id === msg.id) {
     current.card.showMeanings(msg.explanation);
     return;

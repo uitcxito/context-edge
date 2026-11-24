@@ -34,12 +34,14 @@ export class Card {
   constructor(
     private getAnchorRect: () => DOMRect | null,
     private target: string,
+    pageZoom: number,
     private retry: () => void,
     private settings: () => void
   ) {
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(css);
     this.shadow.adoptedStyleSheets = [sheet];
+    this.setPageZoom(pageZoom);
     this.host.setAttribute('popover', 'manual');
     this.host.lang = 'zh-CN';
     this.panel.tabIndex = -1;
@@ -60,6 +62,12 @@ export class Card {
     this.panel.focus({ preventScroll: true });
     this.resize.observe(this.panel);
     this.resize.observe(this.title);
+  }
+  setPageZoom(pageZoom: number) {
+    const visualZoom = Math.min(1.2, 1 + (pageZoom - 1) * 0.4);
+    const scale = pageZoom > 1 ? visualZoom / pageZoom : 1;
+    this.host.style.setProperty('--context-card-scale', String(scale), 'important');
+    this.schedulePosition();
   }
   schedulePosition() {
     if (this.frame !== null) return;

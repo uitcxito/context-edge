@@ -367,7 +367,7 @@
   };
 
   // src/content/card.css
-  var card_default = ':host {\n  all: initial;\n  display: flex !important;\n  flex-direction: column !important;\n  position: fixed !important;\n  box-sizing: border-box !important;\n  inset: auto;\n  width: clamp(240px, 140px + 18vw, 420px) !important;\n  min-width: 0 !important;\n  max-width: calc(100% - 16px) !important;\n  height: auto !important;\n  max-height: calc(100% - 16px) !important;\n  padding: 0 !important;\n  margin: 0 !important;\n  border: 0 !important;\n  background: transparent !important;\n  overflow: visible !important;\n  z-index: 2147483647 !important;\n  color-scheme: light dark;\n}\n:host([hidden]) { display: none !important; }\n:host::backdrop { background: transparent; pointer-events: none; }\n* { box-sizing: border-box; }\narticle {\n  --paper: #fffcf6; --ink: #292824; --sub: #67645d; --line: #e8e1d6; --accent: #316057;\n  font: clamp(14px, 12px + 0.3vw, 17px)/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;\n  color: var(--ink); background: var(--paper); border: 1px solid var(--line);\n  border-radius: 1em; padding: 1em;\n  box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);\n  overflow-wrap: anywhere; overflow-y: auto; scrollbar-gutter: stable;\n  min-height: 0; text-align: start; direction: ltr;\n  animation: enter 130ms ease-out;\n}\n@keyframes enter { from { opacity: 0; } to { opacity: 1; } }\n@media (prefers-reduced-motion: reduce) { article { animation: none; } }\n@media (prefers-color-scheme: dark) {\n  article { --paper: #292925; --ink: #f5f1e8; --sub: #c0bcb1; --line: #4b4b43; --accent: #acd7c2; }\n}\narticle:focus { outline: none; }\n.heading { display: flex; align-items: center; gap: .35em; margin-bottom: .45em; }\nh2 { font: 600 1.15em/1.32 "Segoe UI", system-ui, sans-serif; min-width: 0; margin: 0; color: var(--ink); }\np { margin: 0; }\n.zh, .status, .note { font-size: .94em; color: var(--sub); }\n.zh { margin-top: .38em; }\nbutton {\n  appearance: none; border: 0; border-radius: 4px; background: transparent; color: var(--accent);\n  font: 600 .86em/1.5 "Segoe UI", system-ui, sans-serif; padding: .25em .18em; margin-top: .65em; cursor: pointer;\n}\nbutton:hover { text-decoration: underline; }\nbutton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n.pronounce {\n  flex: none; display: grid; place-items: center; width: 1.85em; height: 1.85em;\n  font-size: 1em; margin: 0; padding: 0; border-radius: 50%;\n}\n.pronounce:hover, .pronounce[aria-disabled="true"] { background: var(--line); }\n.pronounce[aria-disabled="true"] { cursor: default; }\n.pronounce svg {\n  width: 1.2em; height: 1.2em; fill: none; stroke: currentColor;\n  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;\n}\n@media (pointer: coarse) { .pronounce { min-width: 44px; min-height: 44px; } }\n.speech-message:empty { display: none; }\n.speech-message { margin-bottom: .4em; }\n.note { margin-top: .45em; padding-top: .6em; border-top: 1px solid var(--line); }\n';
+  var card_default = ':host {\n  all: initial;\n  display: flex !important;\n  flex-direction: column !important;\n  position: fixed !important;\n  box-sizing: border-box !important;\n  inset: auto;\n  width: calc(420px * var(--context-card-scale)) !important;\n  min-width: 0 !important;\n  max-width: calc(100% - 16px) !important;\n  height: auto !important;\n  max-height: calc(100% - 16px) !important;\n  padding: 0 !important;\n  margin: 0 !important;\n  border: 0 !important;\n  background: transparent !important;\n  overflow: visible !important;\n  z-index: 2147483647 !important;\n  color-scheme: light dark;\n}\n:host([hidden]) { display: none !important; }\n:host::backdrop { background: transparent; pointer-events: none; }\n* { box-sizing: border-box; }\narticle {\n  --paper: #fffcf6; --ink: #292824; --sub: #67645d; --line: #e8e1d6; --accent: #316057;\n  font: calc(17px * var(--context-card-scale))/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;\n  color: var(--ink); background: var(--paper); border: 1px solid var(--line);\n  border-radius: 1em; padding: 1em;\n  box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);\n  overflow-wrap: anywhere; overflow-y: auto; scrollbar-gutter: stable;\n  min-height: 0; text-align: start; direction: ltr;\n  animation: enter 130ms ease-out;\n}\n@keyframes enter { from { opacity: 0; } to { opacity: 1; } }\n@media (prefers-reduced-motion: reduce) { article { animation: none; } }\n@media (prefers-color-scheme: dark) {\n  article { --paper: #292925; --ink: #f5f1e8; --sub: #c0bcb1; --line: #4b4b43; --accent: #acd7c2; }\n}\narticle:focus { outline: none; }\n.heading { display: flex; align-items: center; gap: .35em; margin-bottom: .45em; }\nh2 { font: 600 1.15em/1.32 "Segoe UI", system-ui, sans-serif; min-width: 0; margin: 0; color: var(--ink); }\np { margin: 0; }\n.zh, .status, .note { font-size: .94em; color: var(--sub); }\n.zh { margin-top: .38em; }\nbutton {\n  appearance: none; border: 0; border-radius: 4px; background: transparent; color: var(--accent);\n  font: 600 .86em/1.5 "Segoe UI", system-ui, sans-serif; padding: .25em .18em; margin-top: .65em; cursor: pointer;\n}\nbutton:hover { text-decoration: underline; }\nbutton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n.pronounce {\n  flex: none; display: grid; place-items: center; width: 1.85em; height: 1.85em;\n  font-size: 1em; margin: 0; padding: 0; border-radius: 50%;\n}\n.pronounce:hover, .pronounce[aria-disabled="true"] { background: var(--line); }\n.pronounce[aria-disabled="true"] { cursor: default; }\n.pronounce svg {\n  width: 1.2em; height: 1.2em; fill: none; stroke: currentColor;\n  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;\n}\n@media (pointer: coarse) {\n  .pronounce {\n    min-width: calc(44px * var(--context-card-scale));\n    min-height: calc(44px * var(--context-card-scale));\n  }\n}\n.speech-message:empty { display: none; }\n.speech-message { margin-bottom: .4em; }\n.note { margin-top: .45em; padding-top: .6em; border-top: 1px solid var(--line); }\n';
 
   // src/content/card.ts
   var messages = {
@@ -396,7 +396,7 @@
     return node;
   }
   var Card = class {
-    constructor(getAnchorRect, target, retry, settings) {
+    constructor(getAnchorRect, target, pageZoom2, retry, settings) {
       this.getAnchorRect = getAnchorRect;
       this.target = target;
       this.retry = retry;
@@ -404,6 +404,7 @@
       const sheet = new CSSStyleSheet();
       sheet.replaceSync(card_default);
       this.shadow.adoptedStyleSheets = [sheet];
+      this.setPageZoom(pageZoom2);
       this.host.setAttribute("popover", "manual");
       this.host.lang = "zh-CN";
       this.panel.tabIndex = -1;
@@ -440,6 +441,12 @@
     previousFocus = document.activeElement;
     resize = new ResizeObserver(() => this.schedulePosition());
     frame = null;
+    setPageZoom(pageZoom2) {
+      const visualZoom = Math.min(1.2, 1 + (pageZoom2 - 1) * 0.4);
+      const scale = pageZoom2 > 1 ? visualZoom / pageZoom2 : 1;
+      this.host.style.setProperty("--context-card-scale", String(scale), "important");
+      this.schedulePosition();
+    }
     schedulePosition() {
       if (this.frame !== null) return;
       this.frame = requestAnimationFrame(() => {
@@ -572,6 +579,7 @@
   var buttons = 0;
   var enabled = false;
   var stateVersion = 0;
+  var pageZoom;
   var menuRange = null;
   var current = null;
   async function send(message) {
@@ -595,16 +603,22 @@
   async function refresh() {
     const version = ++stateVersion;
     enabled = false;
+    pageZoom = void 0;
     closeCard();
-    const state = await send({ type: "state" }).catch(() => false);
-    if (version === stateVersion) enabled = state === true;
+    const [state, initialZoom] = await Promise.all([
+      send({ type: "state" }).catch(() => false),
+      send({ type: "getZoom" }).catch(() => 1)
+    ]);
+    if (version !== stateVersion) return;
+    pageZoom ??= initialZoom;
+    enabled = state === true;
   }
   function lookup(anchor) {
     if (!enabled || !anchor.root.isConnected || anchor.range.collapsed) return;
     closeCard();
     const id = cryptoId();
     const page = location.href;
-    const card = new Card(anchor.getRect, anchor.reading.selected, () => lookup(anchor), () => {
+    const card = new Card(anchor.getRect, anchor.reading.selected, pageZoom ?? 1, () => lookup(anchor), () => {
       void send({ type: "options" }).catch(() => void 0);
     });
     const observer = new MutationObserver((records) => {
@@ -682,6 +696,12 @@
     }
     if (msg?.type === "refresh") {
       void refresh();
+      return;
+    }
+    if (msg?.type === "zoomChanged") {
+      tap.cancel();
+      pageZoom = msg.factor;
+      current?.card.setPageZoom(pageZoom);
       return;
     }
     if (msg?.type === "preview" && current?.pending && current.id === msg.id) {

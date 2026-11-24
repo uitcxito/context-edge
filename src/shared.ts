@@ -28,11 +28,12 @@ export type ErrorCode = 'disabled' | 'cancelled' | 'noKey' | 'badKey' | 'forbidd
   'invalid' | 'target' | 'service' | 'settings' | 'reload';
 export type Reply = { ok: true; explanation: Explanation } | { ok: false; error: ErrorCode };
 export type ClientMessage =
-  | { type: 'state' | 'options' }
+  | { type: 'state' | 'options' | 'getZoom' }
   | { type: 'lookup'; id: string; reading: Reading }
   | { type: 'cancel'; id: string };
 export type WorkerMessage =
   | { type: 'refresh' | 'site' }
+  | { type: 'zoomChanged'; factor: number }
   | { type: 'selection'; text: string }
   | { type: 'preview'; id: string; explanation: ExplanationPreview };
 

@@ -750,6 +750,9 @@ ${value}`;
   function tellTab(tabId, message) {
     return chrome.tabs.sendMessage(tabId, message, { frameId: 0 }).catch(() => void 0);
   }
+  chrome.tabs.onZoomChange.addListener(({ tabId, newZoomFactor }) => {
+    void tellTab(tabId, { type: "zoomChanged", factor: newZoomFactor });
+  });
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === menuId && tab?.id !== void 0 && !info.editable && !info.frameId && info.selectionText) {
       void tellTab(tab.id, { type: "selection", text: info.selectionText });
@@ -796,6 +799,10 @@ ${value}`;
     if (!msg || sender.id !== chrome.runtime.id || tab === void 0 || sender.frameId !== 0 || !site) return;
     if (msg.type === "state") {
       void switchState(site).then((s) => respond(s.active), () => respond(false));
+      return true;
+    }
+    if (msg.type === "getZoom") {
+      void chrome.tabs.getZoom(tab).then(respond, () => respond(1));
       return true;
     }
     if (msg.type === "lookup" && typeof msg.id === "string" && msg.id.length <= 64 && validReading(msg.reading)) {
