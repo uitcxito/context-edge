@@ -1,145 +1,38 @@
-import type { ClientMessage, Reply, WorkerMessage } from '../shared';
-import { Card } from './card';
-import { type Anchor, pointedWord, selectionAnchor, skip } from './dom';
-import { CtrlTap } from './gesture';
+import type { ClientMessage, ReaderState, Reply, WorkerMessage } from '../shared';
+import { ReadingSession } from './reader';
 
-const tap = new CtrlTap();
-const capture = { capture: true, passive: true } as const;
-let point: { x: number; y: number } | null = null;
-let buttons = 0;
-let enabled = false;
-let stateVersion = 0;
-let pageZoom: number | undefined;
-let menuRange: Range | null = null;
-let current: { id: string; card: Card; observer: MutationObserver; pending: boolean } | null = null;
-async function send<T>(message: ClientMessage): Promise<T> {
+function send<T>(message: ClientMessage): Promise<T> {
   return chrome.runtime.sendMessage(message);
 }
-
-function closeCard() {
-  if (!current) return;
-  const { id, card, observer } = current;
-  current = null;
-  observer.disconnect();
-  card.remove();
-  void send({ type: 'cancel', id }).catch(() => undefined);
-}
-function reset() {
-  closeCard();
-  tap.reset();
-  menuRange = null;
-  point = null;
-  buttons = 0;
-}
+const session = new ReadingSession({
+  lookup: (id, reading, preload) => send<Reply>({ type: 'lookup', id, reading, preload }),
+  cancel: id => { void send({ type: 'cancel', id }).catch(() => undefined); },
+  options: () => { void send({ type: 'options' }).catch(() => undefined); }
+});
+let version = 0, zoomVersion = 0, prefsVersion = 0;
 async function refresh() {
-  const version = ++stateVersion;
-  enabled = false;
-  pageZoom = undefined;
-  closeCard();
-  const [state, initialZoom] = await Promise.all([
-    send<boolean>({ type: 'state' }).catch(() => false),
+  const revision = ++version, zoomAtStart = zoomVersion, prefsAtStart = prefsVersion;
+  session.enabled = false;
+  session.clear();
+  const [state, zoom] = await Promise.all([
+    send<ReaderState>({ type: 'state' }).catch(() => null),
     send<number>({ type: 'getZoom' }).catch(() => 1)
   ]);
-  if (version !== stateVersion) return;
-  // A zoom event received during initialization is newer than the snapshot.
-  pageZoom ??= initialZoom;
-  enabled = state === true;
+  if (revision !== version) return;
+  if (zoomVersion === zoomAtStart) session.setZoom(zoom);
+  if (state && prefsVersion === prefsAtStart) session.setPreferences(state);
+  session.enabled = state?.active === true;
 }
-function lookup(anchor: Anchor) {
-  if (!enabled || !anchor.root.isConnected || anchor.range.collapsed) return;
-  closeCard();
-  const id = cryptoId();
-  const page = location.href;
-  const card = new Card(anchor.getRect, anchor.reading.selected, pageZoom ?? 1, () => lookup(anchor), () => {
-    void send({ type: 'options' }).catch(() => undefined);
-  });
-  const observer = new MutationObserver(records => {
-    if (location.href !== page || !anchor.root.isConnected || anchor.range.collapsed ||
-      !anchor.root.contains(anchor.range.startContainer) ||
-      (records.some(record => anchor.root.contains(record.target)) && anchor.root.textContent !== anchor.textAtLookup)) closeCard();
-  });
-  observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
-  current = { id, card, observer, pending: true };
-  void send<Reply>({ type: 'lookup', id, reading: anchor.reading })
-    .catch((): Reply => ({ ok: false, error: 'reload' }))
-    .then(reply => {
-      if (current?.id !== id) return;
-      current.pending = false;
-      if (!reply || (!reply.ok && ['disabled', 'cancelled'].includes(reply.error))) { closeCard(); return; }
-      card.show(reply);
-    });
-}
-// randomUUID is unavailable to content scripts on some non-secure HTTP pages.
-function cryptoId() { return Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-'); }
-function editing(e: Event) {
-  const target = e.composedPath().find(v => v instanceof Element);
-  if (target && current?.card.host.contains(document.activeElement) && e.composedPath().includes(current.card.host)) return false;
-  return document.designMode === 'on' || skip(target instanceof Element ? target : null) || skip(document.activeElement);
-}
-window.addEventListener('pointermove', e => {
-  if (!e.isTrusted || e.pointerType !== 'mouse') return;
-  point = { x: e.clientX, y: e.clientY };
-  buttons = e.buttons;
-}, capture);
-window.addEventListener('pointerout', e => { if (!e.relatedTarget) { point = null; tap.cancel(); } }, capture);
-window.addEventListener('pointerdown', e => {
-  if (!e.isTrusted) return;
-  tap.cancel();
-  buttons = e.buttons;
-  menuRange = null;
-  if (current && !e.composedPath().includes(current.card.host)) closeCard();
-}, capture);
-window.addEventListener('pointerup', e => { buttons = e.buttons; tap.cancel(); }, capture);
-window.addEventListener('pointercancel', () => { buttons = 0; tap.cancel(); }, capture);
-window.addEventListener('wheel', () => tap.cancel(), capture);
-window.addEventListener('keydown', e => {
-  if (!e.isTrusted) return;
-  tap.down(e, performance.now());
-  if (e.code === 'ControlLeft' && (!enabled || buttons || editing(e))) tap.cancel();
-  if (e.key === 'Escape') closeCard();
-}, capture);
-window.addEventListener('keyup', e => {
-  if (!e.isTrusted || !tap.up(e.code, performance.now()) || !enabled || !point || buttons || editing(e)) return;
-  const anchor = pointedWord(point);
-  if (anchor) lookup(anchor);
-}, capture);
-window.addEventListener('contextmenu', e => {
-  menuRange = null;
-  if (!e.isTrusted || !enabled || editing(e)) return;
-  const selection = getSelection();
-  if (selection?.rangeCount === 1 && !selection.isCollapsed) menuRange = selection.getRangeAt(0).cloneRange();
-}, capture);
 chrome.runtime.onMessage.addListener((msg: WorkerMessage, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return;
-  if (msg?.type === 'site') { respond(location.hostname); return; }
-  if (msg?.type === 'refresh') { void refresh(); return; }
-  if (msg?.type === 'zoomChanged') {
-    tap.cancel();
-    pageZoom = msg.factor;
-    current?.card.setPageZoom(pageZoom);
-    return;
-  }
-  if (msg?.type === 'preview' && current?.pending && current.id === msg.id) {
-    current.card.showMeanings(msg.explanation);
-    return;
-  }
-  if (msg?.type === 'selection' && enabled && menuRange && document.designMode !== 'on') {
-    const range = menuRange;
-    menuRange = null;
-    const anchor = selectionAnchor(range, msg.text);
-    if (anchor) lookup(anchor);
+  switch (msg?.type) {
+    case 'site': respond(location.hostname); break;
+    case 'refresh': void refresh(); break;
+    case 'preferences': prefsVersion++; session.setPreferences(msg.preferences); break;
+    case 'zoomChanged': zoomVersion++; session.setZoom(msg.factor); break;
+    case 'preview': session.preview(msg.id, msg.explanation); break;
+    case 'selection': session.explainSelection(msg.text); break;
   }
 });
-window.addEventListener('scroll', e => {
-  if (current && !e.composedPath().includes(current.card.host)) current.card.schedulePosition();
-  tap.cancel();
-}, capture);
-window.addEventListener('blur', () => { tap.reset(); buttons = 0; });
-window.addEventListener('pagehide', reset);
 window.addEventListener('pageshow', e => { if (e.persisted) void refresh(); });
-window.addEventListener('resize', () => current?.card.schedulePosition());
-window.addEventListener('hashchange', reset);
-window.addEventListener('popstate', reset);
-(window as Window & { navigation?: EventTarget }).navigation?.addEventListener('currententrychange', reset);
-document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
 void refresh();

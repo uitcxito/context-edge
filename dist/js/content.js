@@ -4,6 +4,10 @@
   var CONTEXT_LIMIT = 1200;
   var TARGET_LIMIT = 260;
   var TITLE_LIMIT = 100;
+  function readingPreferences(values) {
+    const theme = values.underlineTheme;
+    return { doubleClickPreload: values.doubleClickPreload !== false, underlineTheme: theme === "blue" || theme === "clay" ? theme : "auto" };
+  }
   function englishSelection(text) {
     return new RegExp("\\p{Script=Latin}", "u").test(text) && !new RegExp("\\p{L}", "u").test(text.replace(new RegExp("\\p{Script=Latin}", "gu"), ""));
   }
@@ -192,13 +196,9 @@
     }
     return rects.find((rect) => rect.width && rect.height);
   }
-  function visibleRect(range, leaf, glyph) {
-    const rect = fragmentRect(range, glyph);
-    if (!rect) return null;
-    let left = Math.max(rect.left, 0), right = Math.min(rect.right, innerWidth);
-    let top = Math.max(rect.top, 0), bottom = Math.min(rect.bottom, innerHeight);
-    if (left >= right || top >= bottom) return null;
-    for (let el = leaf.parentElement; el && el !== document.documentElement; el = el.parentElement) {
+  function clippingBounds(element2) {
+    let left = 0, right = innerWidth, top = 0, bottom = innerHeight;
+    for (let el = element2; el && el !== document.documentElement; el = el.parentElement) {
       const { overflowX, overflowY, display } = getComputedStyle(el);
       if (overflowX === "visible" && overflowY === "visible" || display === "inline" || display === "contents") continue;
       if (el === document.body && getComputedStyle(document.documentElement).overflow === "visible") continue;
@@ -213,16 +213,42 @@
         top = Math.max(top, y);
         bottom = Math.min(bottom, y + el.clientHeight);
       }
-      if (left >= right || top >= bottom) return null;
     }
+    return { left, right, top, bottom };
+  }
+  function visibleRect(range, leaf, glyph) {
+    const rect = fragmentRect(range, glyph);
+    if (!rect || !leaf.parentElement) return null;
+    const clip = clippingBounds(leaf.parentElement);
+    const left = Math.max(rect.left, clip.left), right = Math.min(rect.right, clip.right);
+    const top = Math.max(rect.top, clip.top), bottom = Math.min(rect.bottom, clip.bottom);
+    if (left >= right || top >= bottom) return null;
     return new DOMRect(left, top, right - left, bottom - top);
   }
-  function makeAnchor(root, block, from, to, range, leaf, glyph) {
+  function makeAnchor(root, block, from, to, glyph) {
+    const span = block.raw.slice(from, to);
+    from += span.length - span.trimStart().length;
+    to -= span.length - span.trimEnd().length;
+    const runs = [];
+    for (const { node, start } of block.leaves) {
+      const begin = Math.max(0, from - start), end = Math.min(node.length, to - start);
+      if (begin >= end) continue;
+      const run = new Range();
+      run.setStart(node, begin);
+      run.setEnd(node, end);
+      runs.push(run);
+    }
+    const first = runs[0], last = runs.at(-1);
+    if (!first || !last) return null;
+    const leaf = (glyph ?? first).startContainer;
     if (!englishBlock(block.raw, language(root, leaf))) return null;
     const reading = extractReading(block.raw, from, to, onX ? "" : document.title);
+    const range = first.cloneRange();
+    range.setEnd(last.endContainer, last.endOffset);
     return reading && {
       root,
       range,
+      runs,
       reading,
       textAtLookup: root.textContent ?? "",
       getRect: () => visibleRect(range, leaf, glyph)
@@ -239,13 +265,7 @@
     if (base === void 0) return null;
     const word = wordAt(block.raw, base + glyph.index);
     if (!word) return null;
-    const first = block.leaves.find((l) => l.start + l.node.length > word.start);
-    const last = block.leaves.find((l) => l.start + l.node.length >= word.end);
-    if (!first || !last) return null;
-    const range = document.createRange();
-    range.setStart(first.node, word.start - first.start);
-    range.setEnd(last.node, word.end - last.start);
-    return makeAnchor(root, block, word.start, word.end, range, glyph.node, glyph.range);
+    return makeAnchor(root, block, word.start, word.end, glyph.range);
   }
   function selectionAnchor(range, menuText) {
     if (range.collapsed || !range.commonAncestorContainer.isConnected) return null;
@@ -260,7 +280,7 @@
     const to = last.start + (range.endContainer === last.node ? range.endOffset : last.node.length);
     const normalize = (s) => s.trim().replace(/\s+/gu, " ");
     if (normalize(block.raw.slice(from, to)) !== normalize(menuText)) return null;
-    return fragmentRect(range) ? makeAnchor(root, block, from, to, range, first.node) : null;
+    return fragmentRect(range) ? makeAnchor(root, block, from, to) : null;
   }
 
   // src/content/pronunciation.ts
@@ -285,11 +305,11 @@
     return synth.getVoices();
   }
   function speakerIcon() {
-    const ns = "http://www.w3.org/2000/svg";
-    const icon = document.createElementNS(ns, "svg");
+    const ns2 = "http://www.w3.org/2000/svg";
+    const icon = document.createElementNS(ns2, "svg");
     icon.setAttribute("viewBox", "0 0 24 24");
     icon.setAttribute("aria-hidden", "true");
-    const path = document.createElementNS(ns, "path");
+    const path = document.createElementNS(ns2, "path");
     path.setAttribute("d", "M11 5 6 9H3v6h3l5 4V5ZM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14");
     icon.append(path);
     return icon;
@@ -367,7 +387,7 @@
   };
 
   // src/content/card.css
-  var card_default = ':host {\n  all: initial;\n  display: flex !important;\n  flex-direction: column !important;\n  position: fixed !important;\n  box-sizing: border-box !important;\n  inset: auto;\n  width: calc(420px * var(--context-card-scale)) !important;\n  min-width: 0 !important;\n  max-width: calc(100% - 16px) !important;\n  height: auto !important;\n  max-height: calc(100% - 16px) !important;\n  padding: 0 !important;\n  margin: 0 !important;\n  border: 0 !important;\n  background: transparent !important;\n  overflow: visible !important;\n  z-index: 2147483647 !important;\n  color-scheme: light dark;\n}\n:host([hidden]) { display: none !important; }\n:host::backdrop { background: transparent; pointer-events: none; }\n* { box-sizing: border-box; }\narticle {\n  --paper: #fffcf6; --ink: #292824; --sub: #67645d; --line: #e8e1d6; --accent: #316057;\n  font: calc(17px * var(--context-card-scale))/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;\n  color: var(--ink); background: var(--paper); border: 1px solid var(--line);\n  border-radius: 1em; padding: 1em;\n  box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);\n  overflow-wrap: anywhere; overflow-y: auto; scrollbar-gutter: stable;\n  min-height: 0; text-align: start; direction: ltr;\n  animation: enter 130ms ease-out;\n}\n@keyframes enter { from { opacity: 0; } to { opacity: 1; } }\n@media (prefers-reduced-motion: reduce) { article { animation: none; } }\n@media (prefers-color-scheme: dark) {\n  article { --paper: #292925; --ink: #f5f1e8; --sub: #c0bcb1; --line: #4b4b43; --accent: #acd7c2; }\n}\narticle:focus { outline: none; }\n.heading { display: flex; align-items: center; gap: .35em; margin-bottom: .45em; }\nh2 { font: 600 1.15em/1.32 "Segoe UI", system-ui, sans-serif; min-width: 0; margin: 0; color: var(--ink); }\np { margin: 0; }\n.zh, .status, .note { font-size: .94em; color: var(--sub); }\n.zh { margin-top: .38em; }\nbutton {\n  appearance: none; border: 0; border-radius: 4px; background: transparent; color: var(--accent);\n  font: 600 .86em/1.5 "Segoe UI", system-ui, sans-serif; padding: .25em .18em; margin-top: .65em; cursor: pointer;\n}\nbutton:hover { text-decoration: underline; }\nbutton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n.pronounce {\n  flex: none; display: grid; place-items: center; width: 1.85em; height: 1.85em;\n  font-size: 1em; margin: 0; padding: 0; border-radius: 50%;\n}\n.pronounce:hover, .pronounce[aria-disabled="true"] { background: var(--line); }\n.pronounce[aria-disabled="true"] { cursor: default; }\n.pronounce svg {\n  width: 1.2em; height: 1.2em; fill: none; stroke: currentColor;\n  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;\n}\n@media (pointer: coarse) {\n  .pronounce {\n    min-width: calc(44px * var(--context-card-scale));\n    min-height: calc(44px * var(--context-card-scale));\n  }\n}\n.speech-message:empty { display: none; }\n.speech-message { margin-bottom: .4em; }\n.note { margin-top: .45em; padding-top: .6em; border-top: 1px solid var(--line); }\n';
+  var card_default = ':host {\r\n  all: initial;\r\n  display: flex !important;\r\n  flex-direction: column !important;\r\n  position: fixed !important;\r\n  box-sizing: border-box !important;\r\n  inset: auto;\r\n  width: calc(420px * var(--context-card-scale)) !important;\r\n  min-width: 0 !important;\r\n  max-width: calc(100% - 16px) !important;\r\n  height: auto !important;\r\n  max-height: calc(100% - 16px) !important;\r\n  padding: 0 !important;\r\n  margin: 0 !important;\r\n  border: 0 !important;\r\n  background: transparent !important;\r\n  overflow: visible !important;\r\n  z-index: 2147483647 !important;\r\n  color-scheme: light dark;\r\n}\r\n:host([hidden]) { display: none !important; }\r\n:host::backdrop { background: transparent; pointer-events: none; }\r\n* { box-sizing: border-box; }\r\narticle {\r\n  --paper: #fffcf6; --ink: #292824; --sub: #67645d; --line: #e8e1d6; --accent: #316057;\r\n  font: calc(17px * var(--context-card-scale))/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;\r\n  color: var(--ink); background: var(--paper); border: 1px solid var(--line);\r\n  border-radius: 1em; padding: 1em;\r\n  box-shadow: 0 6px 24px rgb(45 36 22 / .13), 0 2px 5px rgb(45 36 22 / .04);\r\n  overflow-wrap: anywhere; overflow-y: auto; scrollbar-gutter: stable;\r\n  min-height: 0; text-align: start; direction: ltr;\r\n  animation: enter 130ms ease-out;\r\n}\r\n@keyframes enter { from { opacity: 0; } to { opacity: 1; } }\r\n@media (prefers-reduced-motion: reduce) { article { animation: none; } }\r\n@media (prefers-color-scheme: dark) {\r\n  article { --paper: #292925; --ink: #f5f1e8; --sub: #c0bcb1; --line: #4b4b43; --accent: #acd7c2; }\r\n}\r\narticle:focus { outline: none; }\r\n.heading { display: flex; align-items: center; gap: .35em; margin-bottom: .45em; }\r\nh2 { font: 600 1.15em/1.32 "Segoe UI", system-ui, sans-serif; min-width: 0; margin: 0; color: var(--ink); }\r\np { margin: 0; }\r\n.zh, .status, .note { font-size: .94em; color: var(--sub); }\r\n.zh { margin-top: .38em; }\r\nbutton {\r\n  appearance: none; border: 0; border-radius: 4px; background: transparent; color: var(--accent);\r\n  font: 600 .86em/1.5 "Segoe UI", system-ui, sans-serif; padding: .25em .18em; margin-top: .65em; cursor: pointer;\r\n}\r\nbutton:hover { text-decoration: underline; }\r\nbutton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n.pronounce {\r\n  flex: none; display: grid; place-items: center; width: 1.85em; height: 1.85em;\r\n  font-size: 1em; margin: 0; padding: 0; border-radius: 50%;\r\n}\r\n.pronounce:hover, .pronounce[aria-disabled="true"] { background: var(--line); }\r\n.pronounce[aria-disabled="true"] { cursor: default; }\r\n.pronounce svg {\r\n  width: 1.2em; height: 1.2em; fill: none; stroke: currentColor;\r\n  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;\r\n}\r\n@media (pointer: coarse) {\r\n  .pronounce {\r\n    min-width: calc(44px * var(--context-card-scale));\r\n    min-height: calc(44px * var(--context-card-scale));\r\n  }\r\n}\r\n.speech-message:empty { display: none; }\r\n.speech-message { margin-bottom: .4em; }\r\n.note { margin-top: .45em; padding-top: .6em; border-top: 1px solid var(--line); }\r\n';
 
   // src/content/card.ts
   var messages = {
@@ -396,15 +416,15 @@
     return node;
   }
   var Card = class {
-    constructor(getAnchorRect, target, pageZoom2, retry, settings) {
+    constructor(getAnchorRect, target, pageZoom, retry, settings) {
       this.getAnchorRect = getAnchorRect;
       this.target = target;
       this.retry = retry;
       this.settings = settings;
-      const sheet = new CSSStyleSheet();
-      sheet.replaceSync(card_default);
-      this.shadow.adoptedStyleSheets = [sheet];
-      this.setPageZoom(pageZoom2);
+      const sheet2 = new CSSStyleSheet();
+      sheet2.replaceSync(card_default);
+      this.shadow.adoptedStyleSheets = [sheet2];
+      this.setPageZoom(pageZoom);
       this.host.setAttribute("popover", "manual");
       this.host.lang = "zh-CN";
       this.panel.tabIndex = -1;
@@ -441,9 +461,9 @@
     previousFocus = document.activeElement;
     resize = new ResizeObserver(() => this.schedulePosition());
     frame = null;
-    setPageZoom(pageZoom2) {
-      const visualZoom = Math.min(1.2, 1 + (pageZoom2 - 1) * 0.4);
-      const scale = pageZoom2 > 1 ? visualZoom / pageZoom2 : 1;
+    setPageZoom(pageZoom) {
+      const visualZoom = Math.min(1.2, 1 + (pageZoom - 1) * 0.4);
+      const scale = pageZoom > 1 ? visualZoom / pageZoom : 1;
       this.host.style.setProperty("--context-card-scale", String(scale), "important");
       this.schedulePosition();
     }
@@ -558,10 +578,10 @@
       this.held.add(event.code);
     }
     up(code, time) {
-      const tap2 = code === "ControlLeft" && this.pressedAt !== null && time - this.pressedAt <= TAP_MS;
+      const tap = code === "ControlLeft" && this.pressedAt !== null && time - this.pressedAt <= TAP_MS;
       this.cancel();
       this.held.delete(code);
-      return tap2;
+      return tap;
     }
     cancel() {
       this.pressedAt = null;
@@ -572,167 +592,493 @@
     }
   };
 
-  // src/content/main.ts
-  var tap = new CtrlTap();
-  var capture = { capture: true, passive: true };
-  var point = null;
-  var buttons = 0;
-  var enabled = false;
-  var stateVersion = 0;
-  var pageZoom;
-  var menuRange = null;
-  var current = null;
-  async function send(message) {
-    return chrome.runtime.sendMessage(message);
+  // src/content/underline.ts
+  var ns = "http://www.w3.org/2000/svg";
+  var blue = "#6F93B8";
+  var lightBlue = "#8CB0D4";
+  var clay = "#C98B5E";
+  var motion = matchMedia("(prefers-reduced-motion: reduce)");
+  var scheme = matchMedia("(prefers-color-scheme: dark)");
+  var nextFilter = 0;
+  var sheet;
+  var canvas = null;
+  function darkBehind(element2) {
+    let red = 0, green = 0, blueChannel = 0, remaining = 1;
+    for (let el = element2; el && remaining > 5e-3; el = el.parentElement) {
+      const style = getComputedStyle(el);
+      const color = style.backgroundColor;
+      if (style.backgroundImage !== "none") {
+        const ink = style.color.match(/[\d.]+/g)?.map(Number);
+        if (ink && ink.length >= 3) {
+          const backdrop = 0.2126 * ink[0] + 0.7152 * ink[1] + 0.0722 * ink[2] > 150 ? 0 : 255;
+          red += backdrop * remaining;
+          green += backdrop * remaining;
+          blueChannel += backdrop * remaining;
+          remaining = 0;
+          break;
+        }
+      }
+      if (color === "rgba(0, 0, 0, 0)" || color === "transparent") continue;
+      let channels;
+      if (color.startsWith("rgb")) channels = color.match(/[\d.]+/g).map(Number);
+      else {
+        canvas ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+        if (!canvas) continue;
+        canvas.clearRect(0, 0, 1, 1);
+        canvas.fillStyle = color;
+        canvas.fillRect(0, 0, 1, 1);
+        channels = Array.from(canvas.getImageData(0, 0, 1, 1).data);
+        channels[3] = channels[3] / 255;
+      }
+      const alpha = channels[3] ?? 1;
+      red += channels[0] * alpha * remaining;
+      green += channels[1] * alpha * remaining;
+      blueChannel += channels[2] * alpha * remaining;
+      remaining *= 1 - alpha;
+    }
+    const modes = getComputedStyle(document.documentElement).colorScheme;
+    const darkCanvas = modes.includes("dark") && (!modes.includes("light") || scheme.matches);
+    const base = darkCanvas ? 0 : 255;
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blueChannel + base * remaining < 128;
   }
-  function closeCard() {
-    if (!current) return;
-    const { id, card, observer } = current;
-    current = null;
-    observer.disconnect();
-    card.remove();
-    void send({ type: "cancel", id }).catch(() => void 0);
+  function svg(name, attrs = {}) {
+    const node = document.createElementNS(ns, name);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+    return node;
   }
-  function reset() {
-    closeCard();
-    tap.reset();
-    menuRange = null;
-    point = null;
-    buttons = 0;
+  function createStroke(animate) {
+    const id = "grain-" + ++nextFilter;
+    const image = svg("svg", { "aria-hidden": "true" });
+    const defs = svg("defs");
+    const filter = svg("filter", { id, filterUnits: "userSpaceOnUse", x: -10, y: -10, height: 45 });
+    filter.append(
+      svg("feTurbulence", { type: "fractalNoise", baseFrequency: "0.04 0.5", numOctaves: 2, seed: 4, result: "edge" }),
+      svg("feDisplacementMap", { in: "SourceGraphic", in2: "edge", scale: 1.4, result: "stroke" }),
+      svg("feTurbulence", { type: "fractalNoise", baseFrequency: 1.1, numOctaves: 2, seed: 9, result: "grain" }),
+      svg("feColorMatrix", { in: "grain", type: "matrix", values: "0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  3.4 0 0 0 -1.3", result: "holes" }),
+      svg("feComposite", { in: "stroke", in2: "holes", operator: "in" })
+    );
+    defs.append(filter);
+    const group = svg("g", { filter: "url(#" + id + ")" });
+    const path = svg("path", { fill: "none", "stroke-linecap": "round", pathLength: 1 });
+    if (animate) path.classList.add("draw");
+    group.append(path);
+    image.append(defs, group);
+    return { image, path, filter };
   }
-  async function refresh() {
-    const version = ++stateVersion;
-    enabled = false;
-    pageZoom = void 0;
-    closeCard();
-    const [state, initialZoom] = await Promise.all([
-      send({ type: "state" }).catch(() => false),
-      send({ type: "getZoom" }).catch(() => 1)
-    ]);
-    if (version !== stateVersion) return;
-    pageZoom ??= initialZoom;
-    enabled = state === true;
+  function measure(anchor, theme) {
+    const lines = [];
+    for (const run of anchor.runs) {
+      const el = run.startContainer.parentElement;
+      const rects = [...run.getClientRects()].filter((r) => r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight);
+      if (!el || !rects.length) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility !== "visible") continue;
+      let box = el;
+      while (box && getComputedStyle(box).display === "contents") box = box.parentElement;
+      if (!box?.checkVisibility({ checkVisibilityCSS: true, checkOpacity: true })) continue;
+      const clip = clippingBounds(el);
+      const size = parseFloat(style.fontSize) || 16;
+      const dark = theme !== "clay" && darkBehind(el);
+      const color = theme === "clay" || theme === "auto" && dark ? clay : dark ? lightBlue : blue;
+      for (const rect of rects) {
+        const left = Math.max(rect.left, clip.left), right = Math.min(rect.right, clip.right);
+        const top = Math.max(rect.top, clip.top);
+        if (right <= left || Math.min(rect.bottom, clip.bottom) <= top) continue;
+        const prev = lines.at(-1);
+        const overlap = prev ? Math.min(prev.bottom, rect.bottom) - Math.max(prev.top, top) : 0;
+        if (prev && overlap > Math.min(prev.bottom - prev.top, rect.height) * 0.6 && Math.abs(prev.right - left) < 1 && prev.color === color && prev.clipBottom === clip.bottom) {
+          prev.right = right;
+          prev.top = Math.min(prev.top, top);
+          prev.bottom = Math.max(prev.bottom, rect.bottom);
+          prev.size = Math.max(prev.size, size);
+        } else lines.push({ left, right, top, bottom: rect.bottom, clipBottom: clip.bottom, size, color });
+      }
+    }
+    return lines;
   }
-  function lookup(anchor) {
-    if (!enabled || !anchor.root.isConnected || anchor.range.collapsed) return;
-    closeCard();
-    const id = cryptoId();
-    const page = location.href;
-    const card = new Card(anchor.getRect, anchor.reading.selected, pageZoom ?? 1, () => lookup(anchor), () => {
-      void send({ type: "options" }).catch(() => void 0);
-    });
-    const observer = new MutationObserver((records) => {
-      if (location.href !== page || !anchor.root.isConnected || anchor.range.collapsed || !anchor.root.contains(anchor.range.startContainer) || records.some((record) => anchor.root.contains(record.target)) && anchor.root.textContent !== anchor.textAtLookup) closeCard();
-    });
-    observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
-    current = { id, card, observer, pending: true };
-    void send({ type: "lookup", id, reading: anchor.reading }).catch(() => ({ ok: false, error: "reload" })).then((reply) => {
-      if (current?.id !== id) return;
-      current.pending = false;
-      if (!reply || !reply.ok && ["disabled", "cancelled"].includes(reply.error)) {
-        closeCard();
+  var CrayonUnderline = class {
+    constructor(anchor, theme) {
+      this.anchor = anchor;
+      if (!sheet) {
+        sheet = new CSSStyleSheet();
+        sheet.replaceSync(`
+        :host { all: initial !important; position: fixed !important; display: block !important;
+          inset: 0 auto auto 0 !important; width: 0 !important; height: 0 !important; overflow: visible !important;
+          pointer-events: none !important; z-index: 2147483646 !important; }
+        svg { position: absolute; overflow: hidden; pointer-events: none; }
+        @media (prefers-reduced-motion: no-preference) {
+          .draw { stroke-dasharray: 1; animation: draw 420ms cubic-bezier(.25,.8,.25,1); }
+          @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+        }`);
+      }
+      const shadow = this.host.attachShadow({ mode: "open" });
+      shadow.adoptedStyleSheets = [sheet];
+      this.host.setAttribute("aria-hidden", "true");
+      shadow.append(this.layer);
+      document.documentElement.append(this.host);
+      this.position(theme, true);
+    }
+    anchor;
+    host = document.createElement("context-reading-underline");
+    layer = document.createElement("div");
+    strokes = [];
+    hits = [];
+    position(theme, animate = false) {
+      this.hits = [];
+      let index = 0;
+      for (const line of measure(this.anchor, theme)) {
+        const sw = Math.min(5, Math.max(2.5, line.size * 0.19));
+        const width = line.right - line.left, top = line.bottom + line.size * 0.04;
+        const height = Math.min(Math.ceil(sw * 2 + 2), line.clipBottom - top);
+        this.hits.push(new DOMRect(line.left, line.top, width, Math.min(line.clipBottom, top + sw * 2 + 2) - line.top));
+        if (height <= 0) continue;
+        let stroke = this.strokes[index++];
+        if (!stroke) {
+          stroke = createStroke(animate);
+          this.strokes.push(stroke);
+          this.layer.append(stroke.image);
+        }
+        const inset = Math.min(width / 2, sw / 2);
+        stroke.image.style.left = line.left + "px";
+        stroke.image.style.top = top + "px";
+        stroke.image.setAttribute("width", String(width));
+        stroke.image.setAttribute("height", String(height));
+        stroke.filter.setAttribute("width", String(width + 20));
+        stroke.path.setAttribute("d", "M" + inset + "," + sw + " L" + (width - inset) + "," + (sw + 0.8));
+        stroke.path.setAttribute("stroke", line.color);
+        stroke.path.setAttribute("stroke-width", String(sw));
+      }
+      for (const stroke of this.strokes.splice(index)) stroke.image.remove();
+    }
+    hit(x, y) {
+      return this.hits.some((r) => x >= r.left && x < r.right && y >= r.top && y < r.bottom);
+    }
+    remove(fade = false) {
+      if (!fade || motion.matches) {
+        this.host.remove();
         return;
       }
-      card.show(reply);
-    });
+      const animation = this.layer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: "forwards" });
+      animation.finished.then(() => this.host.remove(), () => this.host.remove());
+    }
+  };
+
+  // src/content/reader.ts
+  var capture = { capture: true, passive: true };
+  var interactive = 'a[href],area[href],[role="link"],summary,audio,video';
+  function plainClick(event) {
+    return event.isTrusted && event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
   }
-  function cryptoId() {
+  function sameRange(a, b) {
+    return a.startContainer === b.startContainer && a.startOffset === b.startOffset && a.endContainer === b.endContainer && a.endOffset === b.endOffset;
+  }
+  function requestId() {
     return Array.from(crypto.getRandomValues(new Uint32Array(4))).join("-");
   }
-  function editing(e) {
-    const target = e.composedPath().find((v) => v instanceof Element);
-    if (target && current?.card.host.contains(document.activeElement) && e.composedPath().includes(current.card.host)) return false;
-    return document.designMode === "on" || skip(target instanceof Element ? target : null) || skip(document.activeElement);
-  }
-  window.addEventListener("pointermove", (e) => {
-    if (!e.isTrusted || e.pointerType !== "mouse") return;
-    point = { x: e.clientX, y: e.clientY };
-    buttons = e.buttons;
-  }, capture);
-  window.addEventListener("pointerout", (e) => {
-    if (!e.relatedTarget) {
-      point = null;
-      tap.cancel();
+  var ReadingSession = class {
+    constructor(service, scope) {
+      this.service = service;
+      this.scope = scope;
+      this.bindGestures();
+      window.addEventListener("scroll", (e) => {
+        if (!this.insideCard(e)) this.schedule();
+      }, capture);
+      window.addEventListener("resize", () => this.schedule());
+      document.fonts.addEventListener("loadingdone", () => this.schedule());
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.schedule());
+      const articleUrl = () => {
+        const url = new URL(location.href);
+        if (!/^#[!/]/.test(url.hash)) url.hash = "";
+        return url.href;
+      };
+      let article = articleUrl();
+      const navigate = () => {
+        const next = articleUrl();
+        if (next !== article) this.clear();
+        article = next;
+      };
+      window.addEventListener("pagehide", () => this.clear());
+      window.addEventListener("hashchange", navigate);
+      window.addEventListener("popstate", navigate);
+      window.navigation?.addEventListener("currententrychange", navigate);
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          this.closeCard();
+          this.tap.reset();
+          this.menuRange = null;
+          this.point = null;
+          this.buttons = 0;
+        } else this.schedule();
+      });
     }
-  }, capture);
-  window.addEventListener("pointerdown", (e) => {
-    if (!e.isTrusted) return;
-    tap.cancel();
-    buttons = e.buttons;
+    service;
+    scope;
+    enabled = false;
+    prefs = readingPreferences({});
+    zoom = 1;
+    marks = /* @__PURE__ */ new Map();
+    opened;
+    frame;
+    resize = new ResizeObserver(() => this.schedule());
+    observer = new MutationObserver((records) => {
+      if (records.every((r) => r.target instanceof Element && r.target.matches(HOST + ",context-reading-underline"))) return;
+      for (const mark of this.marks.values()) {
+        const { root, range, textAtLookup } = mark.anchor;
+        if (!root.isConnected || range.collapsed || !root.contains(range.startContainer) || !root.contains(range.endContainer) || records.some((r) => r.type !== "attributes" && root.contains(r.target)) && root.textContent !== textAtLookup) this.discard(mark);
+      }
+      this.schedule();
+    });
     menuRange = null;
-    if (current && !e.composedPath().includes(current.card.host)) closeCard();
-  }, capture);
-  window.addEventListener("pointerup", (e) => {
-    buttons = e.buttons;
-    tap.cancel();
-  }, capture);
-  window.addEventListener("pointercancel", () => {
+    setPreferences(prefs) {
+      this.prefs = prefs;
+      if (!prefs.doubleClickPreload) {
+        for (const mark of this.marks.values()) if (mark.persistent) this.discard(mark);
+      }
+      this.schedule();
+    }
+    setZoom(factor) {
+      this.zoom = factor;
+      this.opened?.card.setPageZoom(factor);
+      this.tap.cancel();
+      this.schedule();
+    }
+    preview(id, result) {
+      const mark = this.marks.get(id);
+      if (!mark || mark.reply) return;
+      mark.preview = result;
+      if (this.opened?.mark === mark) this.opened.card.showMeanings(result);
+    }
+    explainSelection(text) {
+      const range = this.menuRange;
+      this.menuRange = null;
+      if (!this.enabled || !range || document.designMode === "on") return;
+      const anchor = selectionAnchor(range, text);
+      if (anchor) this.lookup(anchor, false);
+    }
+    clear() {
+      for (const mark of this.marks.values()) this.discard(mark);
+      this.tap.reset();
+      this.menuRange = null;
+      this.point = null;
+      this.buttons = 0;
+    }
+    schedule() {
+      if (this.frame !== void 0 || !this.marks.size) return;
+      this.opened?.card.schedulePosition();
+      this.frame = requestAnimationFrame(() => {
+        this.frame = void 0;
+        for (const mark of this.marks.values()) mark.line.position(this.prefs.underlineTheme);
+      });
+    }
+    discard(mark, fade = false) {
+      if (this.opened?.mark === mark) {
+        this.opened.card.remove();
+        this.opened = void 0;
+      }
+      this.marks.delete(mark.id);
+      mark.line.remove(fade);
+      if (!mark.reply) this.service.cancel(mark.id);
+      if (![...this.marks.values()].some((m) => m.anchor.root === mark.anchor.root)) this.resize.unobserve(mark.anchor.root);
+      if (!this.marks.size) {
+        this.observer.disconnect();
+        this.resize.disconnect();
+      }
+    }
+    closeCard() {
+      const open = this.opened;
+      if (!open) return;
+      this.opened = void 0;
+      open.card.remove();
+      if (!open.mark.persistent) this.discard(open.mark, true);
+    }
+    open(mark) {
+      if (this.opened?.mark === mark) return;
+      this.closeCard();
+      const card = new Card(mark.anchor.getRect, mark.anchor.reading.selected, this.zoom, () => {
+        const { anchor, persistent } = mark;
+        this.discard(mark);
+        const retry = this.lookup(anchor, persistent);
+        if (retry) this.open(retry);
+      }, () => this.service.options());
+      this.opened = { mark, card };
+      if (mark.reply) card.show(mark.reply);
+      else if (mark.preview) card.showMeanings(mark.preview);
+    }
+    lookup(anchor, preload) {
+      if (!this.enabled || !anchor.root.isConnected || anchor.range.collapsed || this.scope && !this.scope.contains(anchor.root)) return;
+      const match = [...this.marks.values()].find((m) => sameRange(m.anchor.range, anchor.range));
+      if (match) {
+        if (preload) match.persistent = true;
+        else this.open(match);
+        return match;
+      }
+      if (!preload) this.closeCard();
+      const mark = { id: requestId(), anchor, persistent: preload, line: new CrayonUnderline(anchor, this.prefs.underlineTheme) };
+      if (!this.marks.size) {
+        this.observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true });
+        this.resize.observe(document.documentElement);
+      }
+      this.resize.observe(anchor.root);
+      this.marks.set(mark.id, mark);
+      if (!preload) this.open(mark);
+      void this.service.lookup(mark.id, anchor.reading, preload).catch(() => ({ ok: false, error: "reload" })).then((reply) => {
+        if (this.marks.get(mark.id) !== mark) return;
+        if (!reply || !reply.ok && (reply.error === "disabled" || reply.error === "cancelled")) {
+          this.discard(mark);
+          return;
+        }
+        mark.reply = reply;
+        mark.preview = void 0;
+        if (this.opened?.mark === mark) this.opened.card.show(reply);
+      });
+      return mark;
+    }
+    insideCard(event) {
+      return Boolean(this.opened && event.composedPath().includes(this.opened.card.host));
+    }
+    editing(event) {
+      if (this.insideCard(event)) return false;
+      if (this.scope && event instanceof KeyboardEvent && this.point && document.activeElement?.matches("input[type=radio],input[type=checkbox]") && this.scope.contains(document.elementFromPoint(this.point.x, this.point.y))) return false;
+      const target = event.composedPath().find((v) => v instanceof Element);
+      return document.designMode === "on" || skip(target instanceof Element ? target : null) || skip(document.activeElement);
+    }
+    tap = new CtrlTap();
+    point = null;
     buttons = 0;
-    tap.cancel();
-  }, capture);
-  window.addEventListener("wheel", () => tap.cancel(), capture);
-  window.addEventListener("keydown", (e) => {
-    if (!e.isTrusted) return;
-    tap.down(e, performance.now());
-    if (e.code === "ControlLeft" && (!enabled || buttons || editing(e))) tap.cancel();
-    if (e.key === "Escape") closeCard();
-  }, capture);
-  window.addEventListener("keyup", (e) => {
-    if (!e.isTrusted || !tap.up(e.code, performance.now()) || !enabled || !point || buttons || editing(e)) return;
-    const anchor = pointedWord(point);
-    if (anchor) lookup(anchor);
-  }, capture);
-  window.addEventListener("contextmenu", (e) => {
-    menuRange = null;
-    if (!e.isTrusted || !enabled || editing(e)) return;
-    const selection = getSelection();
-    if (selection?.rangeCount === 1 && !selection.isCollapsed) menuRange = selection.getRangeAt(0).cloneRange();
-  }, capture);
+    bindGestures() {
+      let press;
+      window.addEventListener("pointermove", (e) => {
+        if (!e.isTrusted || e.pointerType !== "mouse") return;
+        this.point = { x: e.clientX, y: e.clientY };
+        this.buttons = e.buttons;
+        if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 4) press = void 0;
+      }, capture);
+      window.addEventListener("pointerout", (e) => {
+        if (!e.relatedTarget) {
+          this.point = null;
+          this.tap.cancel();
+        }
+      }, capture);
+      window.addEventListener("pointerdown", (e) => {
+        if (!e.isTrusted) return;
+        press = void 0;
+        this.tap.cancel();
+        this.buttons = e.buttons;
+        this.menuRange = null;
+        if (this.insideCard(e)) return;
+        this.closeCard();
+        if (!plainClick(e) || !this.enabled || !this.prefs.doubleClickPreload || !(e.target instanceof Element) || skip(e.target) || e.target.closest(interactive)) return;
+        const target = e.target;
+        const mark = [...this.marks.values()].find((m) => m.persistent && (m.anchor.root.contains(target) || target.contains(m.anchor.root)) && m.line.hit(e.clientX, e.clientY));
+        if (mark) press = { mark, x: e.clientX, y: e.clientY };
+      }, capture);
+      window.addEventListener("pointerup", (e) => {
+        this.buttons = e.buttons;
+        this.tap.cancel();
+      }, capture);
+      window.addEventListener("pointercancel", () => {
+        press = void 0;
+        this.buttons = 0;
+        this.tap.cancel();
+      }, capture);
+      window.addEventListener("click", (e) => {
+        const clicked = press;
+        press = void 0;
+        if (clicked && plainClick(e) && e.detail !== 2 && !this.editing(e) && this.marks.has(clicked.mark.id) && clicked.mark.line.hit(e.clientX, e.clientY)) this.open(clicked.mark);
+      }, capture);
+      window.addEventListener("dblclick", (e) => {
+        if (!plainClick(e) || !this.enabled || !this.prefs.doubleClickPreload || this.insideCard(e) || this.editing(e) || !(e.target instanceof Element) || e.target.closest(interactive)) return;
+        const selection = getSelection();
+        if (!selection?.rangeCount || selection.isCollapsed) return;
+        const anchor = pointedWord({ x: e.clientX, y: e.clientY });
+        if (anchor && selection.toString().trim() === anchor.reading.selected && selection.containsNode(anchor.range.startContainer, true)) {
+          this.lookup(anchor, true);
+        }
+      }, capture);
+      window.addEventListener("wheel", () => this.tap.cancel(), capture);
+      window.addEventListener("keydown", (e) => {
+        if (!e.isTrusted) return;
+        this.tap.down(e, performance.now());
+        if (e.code === "ControlLeft" && (!this.enabled || this.buttons || this.editing(e))) this.tap.cancel();
+        if (e.key === "Escape") this.closeCard();
+      }, capture);
+      window.addEventListener("keyup", (e) => {
+        if (!e.isTrusted || !this.tap.up(e.code, performance.now()) || !this.enabled || !this.point || this.buttons || this.editing(e)) return;
+        const anchor = pointedWord(this.point);
+        if (anchor) this.lookup(anchor, false);
+      }, capture);
+      window.addEventListener("contextmenu", (e) => {
+        this.menuRange = null;
+        if (!e.isTrusted || !this.enabled || this.editing(e)) return;
+        const selection = getSelection();
+        if (selection?.rangeCount === 1 && !selection.isCollapsed) this.menuRange = selection.getRangeAt(0).cloneRange();
+      }, capture);
+      window.addEventListener("scroll", () => this.tap.cancel(), capture);
+      window.addEventListener("blur", () => {
+        this.tap.reset();
+        this.buttons = 0;
+        press = void 0;
+      });
+    }
+  };
+
+  // src/content/main.ts
+  function send(message) {
+    return chrome.runtime.sendMessage(message);
+  }
+  var session = new ReadingSession({
+    lookup: (id, reading, preload) => send({ type: "lookup", id, reading, preload }),
+    cancel: (id) => {
+      void send({ type: "cancel", id }).catch(() => void 0);
+    },
+    options: () => {
+      void send({ type: "options" }).catch(() => void 0);
+    }
+  });
+  var version = 0;
+  var zoomVersion = 0;
+  var prefsVersion = 0;
+  async function refresh() {
+    const revision = ++version, zoomAtStart = zoomVersion, prefsAtStart = prefsVersion;
+    session.enabled = false;
+    session.clear();
+    const [state, zoom] = await Promise.all([
+      send({ type: "state" }).catch(() => null),
+      send({ type: "getZoom" }).catch(() => 1)
+    ]);
+    if (revision !== version) return;
+    if (zoomVersion === zoomAtStart) session.setZoom(zoom);
+    if (state && prefsVersion === prefsAtStart) session.setPreferences(state);
+    session.enabled = state?.active === true;
+  }
   chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     if (sender.id !== chrome.runtime.id) return;
-    if (msg?.type === "site") {
-      respond(location.hostname);
-      return;
-    }
-    if (msg?.type === "refresh") {
-      void refresh();
-      return;
-    }
-    if (msg?.type === "zoomChanged") {
-      tap.cancel();
-      pageZoom = msg.factor;
-      current?.card.setPageZoom(pageZoom);
-      return;
-    }
-    if (msg?.type === "preview" && current?.pending && current.id === msg.id) {
-      current.card.showMeanings(msg.explanation);
-      return;
-    }
-    if (msg?.type === "selection" && enabled && menuRange && document.designMode !== "on") {
-      const range = menuRange;
-      menuRange = null;
-      const anchor = selectionAnchor(range, msg.text);
-      if (anchor) lookup(anchor);
+    switch (msg?.type) {
+      case "site":
+        respond(location.hostname);
+        break;
+      case "refresh":
+        void refresh();
+        break;
+      case "preferences":
+        prefsVersion++;
+        session.setPreferences(msg.preferences);
+        break;
+      case "zoomChanged":
+        zoomVersion++;
+        session.setZoom(msg.factor);
+        break;
+      case "preview":
+        session.preview(msg.id, msg.explanation);
+        break;
+      case "selection":
+        session.explainSelection(msg.text);
+        break;
     }
   });
-  window.addEventListener("scroll", (e) => {
-    if (current && !e.composedPath().includes(current.card.host)) current.card.schedulePosition();
-    tap.cancel();
-  }, capture);
-  window.addEventListener("blur", () => {
-    tap.reset();
-    buttons = 0;
-  });
-  window.addEventListener("pagehide", reset);
   window.addEventListener("pageshow", (e) => {
     if (e.persisted) void refresh();
-  });
-  window.addEventListener("resize", () => current?.card.schedulePosition());
-  window.addEventListener("hashchange", reset);
-  window.addEventListener("popstate", reset);
-  window.navigation?.addEventListener("currententrychange", reset);
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) reset();
   });
   void refresh();
 })();

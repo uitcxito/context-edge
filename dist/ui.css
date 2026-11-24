@@ -1,12 +1,12 @@
 :root {
   color-scheme: light dark; --bg: #faf9f5; --paper: #fffefb; --ink: #242e2a; --muted: #616b63;
-  --line: #dbded3; --green: #28594e; --on-green: #fff; --tint: #edf1e8; --mark: #dce6cf;
+  --line: #dbded3; --green: #28594e; --on-green: #fff; --tint: #edf1e8;
   font: 15px/1.65 Inter, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   background: var(--bg); color: var(--ink);
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #1d211e; --paper: #262b27; --ink: #f1f1e8; --muted: #bdc7bd;
-    --line: #454e45; --green: #b2d9be; --on-green: #183b2e; --tint: #2a352c; --mark: #405b46; }
+    --line: #454e45; --green: #b2d9be; --on-green: #183b2e; --tint: #2a352c; }
 }
 * { box-sizing: border-box; }
 body, h1, h2, p, blockquote { margin: 0; }
@@ -35,8 +35,24 @@ h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.3; letter-spacing: -.045e
 h2 { font-weight: 650; font-size: 16px; }
 .privacy p, .guide p { color: var(--muted); font-size: 14px; margin-top: 8px; }
 .guide { background: var(--tint); border: 1px solid var(--line); border-radius: 16px; padding: 25px; }
-.guide blockquote { font: 26px/1.4 Georgia, "Times New Roman", serif; margin: 20px 0; }
-.guide mark { background: var(--mark); color: var(--ink); border-bottom: 2px solid var(--green); }
+.sample-head, .sample-head label { display: flex; align-items: center; justify-content: space-between; gap: 7px; }
+.sample-head label, .guide small { color: var(--muted); font-size: 12px; }
+.guide > small { display: block; margin-top: 14px; }
+.guide blockquote { font: 25px/1.65 Georgia, "Times New Roman", serif; margin: 17px 0; padding: 15px;
+  border-radius: 8px; background: #fffcf6; color: #292824; }
+.guide blockquote.dark { background: #252925; color: #f5f1e8; }
+.ink-picker { border: 0; padding: 0; margin: 17px 0 0; }
+.ink-picker legend { padding: 0; margin-bottom: 7px; font-weight: 600; }
+.ink-picker label { display: inline-block; position: relative; cursor: pointer; }
+.ink-picker input { position: absolute; opacity: 0; }
+.ink-picker span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 7px; border: 1px solid var(--line); }
+.ink-picker input:checked + span { border-color: var(--green); background: var(--tint); }
+.ink-picker input:focus-visible + span { outline: 2px solid var(--green); outline-offset: 2px; }
+.ink-picker i { width: 12px; height: 4px; border-radius: 3px; }
+.ink-picker .blue { background: #6F93B8; }
+.ink-picker .clay { background: #C98B5E; }
+.local-demo #prefs, .local-demo .privacy, .local-demo .installed-hint { display: none; }
+.local-demo .settings-layout { display: block; max-width: 590px; margin: 34px auto; }
 .guide p + p { border-top: 1px solid var(--line); margin-top: 17px; padding-top: 15px; }
 kbd { border: 1px solid var(--line); border-bottom-width: 2px; padding: 1px 5px; border-radius: 4px; background: var(--paper); font: inherit; white-space: nowrap; }
 @media (max-width: 720px) { .settings-layout { grid-template-columns: 1fr; margin: 30px auto; gap: 25px; } }

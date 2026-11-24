@@ -1,6 +1,10 @@
 "use strict";
 (() => {
   // src/shared.ts
+  function readingPreferences(values) {
+    const theme = values.underlineTheme;
+    return { doubleClickPreload: values.doubleClickPreload !== false, underlineTheme: theme === "blue" || theme === "clay" ? theme : "auto" };
+  }
   function pauseKey(site2) {
     return "paused:" + site2;
   }
@@ -16,10 +20,12 @@
   }
   async function switchState(site2) {
     const key = site2 ? pauseKey(site2) : null;
-    const data = await (await localStore()).get(key ? ["enabled", key] : ["enabled"]);
+    const keys = ["enabled", "doubleClickPreload", "underlineTheme"];
+    if (key) keys.push(key);
+    const data = await (await localStore()).get(keys);
     const enabled = data.enabled !== false;
     const paused = key !== null && data[key] === true;
-    return { enabled, paused, active: Boolean(site2 && enabled && !paused) };
+    return { enabled, paused, active: Boolean(site2 && enabled && !paused), ...readingPreferences(data) };
   }
 
   // src/ui/popup.ts

@@ -3,8 +3,11 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { answer, envelope, expect, origin, test } from './fixture';
 
-test('hover, double click, copy, alternate chords, Ctrl-click and Ctrl-wheel retain native handling with zero API requests', async ({ reader: r }) => {
+test('with double-click preload off, native selection, copy, alternate chords, Ctrl-click and Ctrl-wheel send zero API requests', async ({ reader: r }) => {
   const p = r.page;
+  await r.options();
+  await p.getByRole('switch', { name: /双击预查/ }).uncheck();
+  await expect.poll(() => r.worker.evaluate(async () => (await chrome.storage.local.get('doubleClickPreload')).doubleClickPreload)).toBe(false);
   await r.open();
   await r.point('#pitch');
   await p.waitForTimeout(550);
@@ -58,7 +61,10 @@ test('Chinese articles, editable focus, form fields, code and synthetically disp
   await r.open(body, origin + 'mixed', 'zh-CN');
   for (const sel of ['#ceo','#ai','#edit','#cm','#code','#box']) {
     await r.tap(sel); await expect(r.card).toHaveCount(0);
+    const word = await r.point(sel);
+    await r.page.mouse.dblclick(word.x, word.y);
   }
+  await expect(r.page.locator('context-reading-underline')).toHaveCount(0);
   for (const sel of ['#pw','#form','#edit']) {
     await r.page.locator(sel).focus();
     await r.tap('#p'); await expect(r.card).toHaveCount(0);

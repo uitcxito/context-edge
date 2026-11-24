@@ -22,12 +22,21 @@
     </form>
     <section class="privacy"><h2>密钥与阅读数据</h2>
       <p>密钥保存在当前浏览器配置文件中，仅扩展可信页面和后台可读取，不会同步。它没有独立加密；能读取本机配置文件的人仍可能取得密钥。</p>
-      <p>主动查词时，扩展将所选词句、邻近文字和普通网页标题发送到 OpenAI 官方接口，费用计入你的 API 项目。释义在本地最多缓存 300 条，保留 7 天。</p>
+      <p>查词或双击预查时，扩展将所选词句、邻近文字和普通网页标题发送到 OpenAI 官方接口，费用计入你的 API 项目。释义在本地最多缓存 300 条，保留 7 天。</p>
     </section>
   </section>
-  <aside class="guide"><h2>在网页上查词</h2>
-    <blockquote lang="en">My <mark>pitch</mark> isn’t working on the fundraising side.</blockquote>
-    <p>把鼠标指向想读懂的词，轻按并松开 <kbd>左 Ctrl</kbd>，即可查看它在这句话里的意思。</p>
-    <p>遇到短语时，先选中文字，再从右键菜单选择「用 Context 解释」。</p>
+  <aside class="guide"><div class="sample-head"><h2>查词试玩</h2>
+    <label for="sample-dark">深色底 <input class="toggle" type="checkbox" role="switch" id="sample-dark"></label></div>
+    <blockquote id="sample-text" lang="en">My <strong>pitch</strong> isn’t working on the <span>fundraising</span> side.</blockquote>
+    <fieldset class="ink-picker"><legend>下划线颜色</legend>
+      <label><input type="radio" name="ink" value="auto" checked><span>自动</span></label>
+      <label><input type="radio" name="ink" value="blue"><span><i class="blue"></i>灰蓝</span></label>
+      <label><input type="radio" name="ink" value="clay"><span><i class="clay"></i>陶土</span></label>
+    </fieldset>
+    <p class="help" id="ink-help" aria-live="polite">自动模式在浅底用灰蓝，在深底用陶土。</p>
+    <p>指向 <b lang="en">pitch</b>，轻按 <kbd>左 Ctrl</kbd>，直接看释义。</p>
+    <label class="switch-row" for="double-click"><span>双击预查<small id="sample-gesture">双击 <b lang="en">fundraising</b> 先加载，点回画线处看释义。</small></span>
+      <input class="toggle" type="checkbox" role="switch" id="double-click" checked></label>
+    <small>本地试玩无需 API Key。<span class="installed-hint">笔色和预查开关也用于网页阅读。</span></small>
   </aside>
 </main></body></html>

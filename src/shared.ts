@@ -27,12 +27,23 @@ export type ErrorCode = 'disabled' | 'cancelled' | 'noKey' | 'badKey' | 'forbidd
   'model' | 'quota' | 'rate' | 'network' | 'timeout' | 'refusal' | 'incomplete' |
   'invalid' | 'target' | 'service' | 'settings' | 'reload';
 export type Reply = { ok: true; explanation: Explanation } | { ok: false; error: ErrorCode };
+export type UnderlineTheme = 'auto' | 'blue' | 'clay';
+export interface ReadingPreferences {
+  doubleClickPreload: boolean;
+  underlineTheme: UnderlineTheme;
+}
+export function readingPreferences(values: { doubleClickPreload?: unknown; underlineTheme?: unknown }): ReadingPreferences {
+  const theme = values.underlineTheme;
+  return { doubleClickPreload: values.doubleClickPreload !== false, underlineTheme: theme === 'blue' || theme === 'clay' ? theme : 'auto' };
+}
+export interface ReaderState extends ReadingPreferences { active: boolean }
 export type ClientMessage =
   | { type: 'state' | 'options' | 'getZoom' }
-  | { type: 'lookup'; id: string; reading: Reading }
+  | { type: 'lookup'; id: string; reading: Reading; preload: boolean }
   | { type: 'cancel'; id: string };
 export type WorkerMessage =
   | { type: 'refresh' | 'site' }
+  | { type: 'preferences'; preferences: ReadingPreferences }
   | { type: 'zoomChanged'; factor: number }
   | { type: 'selection'; text: string }
   | { type: 'preview'; id: string; explanation: ExplanationPreview };

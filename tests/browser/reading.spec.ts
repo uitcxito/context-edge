@@ -215,7 +215,6 @@ test('settings save, preserve and remove the key; missing-key card opens setting
   await r.options();
   await expect(r.page.getByLabel('OpenAI API Key')).toHaveValue('');
   await expect(r.page.locator('#key-state')).toContainText('已保存密钥');
-  await r.capture('edge-settings');
   await r.page.getByLabel('模型名称').fill('model-fixture');
   await r.page.getByRole('button', { name: '保存设置' }).click();
   await expect(r.page.getByRole('status')).toHaveText('设置已保存。');
@@ -354,7 +353,7 @@ test('a persisted cache survives a page reload and a reused SPA text node invali
   expect(r.calls[1]!.input.selected_text).toBe('draft');
 });
 
-test('shows each validated line while the stream is open and only caches a successful completion', async ({ reader: r }) => {
+for (const mode of ['direct', 'preload'] as const) test(mode + ' lookup retains each streamed line and only caches a successful completion', async ({ reader: r }) => {
   // route.fulfill buffers the whole body. Feed the worker an open fetch stream so each assertion can hold back the next event.
   const streams = await r.worker.evaluateHandle(() => {
     const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
@@ -369,11 +368,15 @@ test('shows each validated line while the stream is open and only caches a succe
   const first = { status: 'ok', target: 'earn the right to get there', meaning_en: 'Earn the confidence of investors.' };
   const final = { ...first, meaning_zh: '赢得投资人的信心。', note_en: 'Show them a credible plan.' };
   await r.open();
-  await r.tap('#right');
+  if (mode === 'direct') await r.tap('#right');
+  else await r.page.locator('#right').dblclick();
   await expect.poll(requests).toBe(1);
   const offset = () => offsetFromWord(r.card, r.page.locator('#right'), 'above');
-  await expect.poll(offset).toEqual([0, 6]);
   await emit({ type: 'response.output_text.delta', delta: JSON.stringify(first).slice(0, -1) });
+  if (mode === 'preload') {
+    await expect(r.card).toHaveCount(0);
+    await r.page.locator('#right').click();
+  }
   await expect(r.card).toContainText(first.meaning_en);
   await expect.poll(offset).toEqual([0, 6]);
   await expect(r.card.getByRole('heading')).toHaveText(first.target);
