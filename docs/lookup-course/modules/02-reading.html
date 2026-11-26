@@ -1,0 +1,93 @@
+<section lang="zh-CN" class="module" id="module-2">
+  <div class="module-content">
+    <header class="module-header">
+      <h2 class="module-title">交给后台的是哪一段文字？</h2>
+      <p class="module-subtitle">后台收到 pitch 时，还需要知道它出现在哪一句、哪一个位置。网页则要记住，稍后在哪个词旁边画卡片。</p>
+    </header>
+    <div class="screen">
+      <h3 class="screen-heading">先找到字母，再划出整词</h3>
+      <div class="pattern-cards">
+        <div class="pattern-card">
+          <h4>落在哪个字上</h4>
+          <p>浏览器给出坐标附近的文字位置。pointedWord 检查字形的小方框是否包含指针，指到行尾空白就停下。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>属于哪段原文</h4>
+          <p>网页脚本拼接同一正文块里的可见文字，判断是否为英文。普通文章取当前段落，X 只取当前帖子的正文。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>这个词有多长</h4>
+          <p>浏览器的分词工具划出整个 pitch，再找出包含它的句子。标题、当前句和邻近文字合计最多 1,200 个 UTF-16 代码单元，即程序计算文本长度的单位。</p>
+        </div>
+      </div>
+      <small>查看定位与切句 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/dom.ts#L163" target="_blank" rel="noopener">src/content/dom.ts:163</a> · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/text.ts#L36" target="_blank" rel="noopener">src/content/text.ts:36</a>
+      </small>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">同一个词，留下两份不同的信息</h3>
+      <p>把<button type="button" class="term" style="font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dotted currentColor;cursor:help" data-definition="Anchor 是网页端保存的定位信息，包含原词的文字范围和语境。">锚点</button>想成贴在原文上的标签。打开下面三个视图，分别看读者读到什么、页面留下什么、后台收到什么。</p>
+      <div class="layer-demo">
+        <div class="layer-tabs">
+          <button class="layer-tab active" onclick="showLayer('reading-0',this)">阅读原文</button>
+          <button class="layer-tab " onclick="showLayer('reading-1',this)">留在网页</button>
+          <button class="layer-tab " onclick="showLayer('reading-2',this)">交给后台</button>
+        </div>
+        <div class="layer-viewport">
+          <div class="layer" id="reading-0" style="display:block">
+            <p lang="en">My <mark>pitch</mark> isn't working on the fundraising side.</p>
+            <p>普通网页的示例标题是 Founder notes。这里假设段落里只有这一句。</p>
+          </div>
+          <div class="layer" id="reading-1" style="display:none">
+            <p><strong>Anchor · 原词在网页中的位置</strong>
+            </p>
+            <p>网页脚本留下文字范围、所在段落和重新测量位置的方法。即使页面滚动，仍能找到该把线画在哪里。</p>
+          </div>
+          <div class="layer" id="reading-2" style="display:none">
+            <p><strong>Reading · 文字与句内位置</strong>
+            </p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">selected = "pitch"
+sentence = "My pitch isn't working on the fundraising side."
+start = 3     end = 8
+before = ""   after = ""
+title = "Founder notes"</pre></div>
+        </div>
+      </div>
+      <aside class="callout callout-accent">
+        <div class="callout-content">
+          <p>start 从 0 数，end 指向最后一个字母之后的位置。这里取原句第 3 到第 8 位之前，正好是 pitch。同一句里即使有两个 pitch，也可以区分你指的那一个。</p>
+        </div>
+      </aside>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">从定位切换到查词</h3>
+      <p>网页为新查询分配编号，创建蜡笔下划线，并显示「正在读取语境…」。随后内容脚本把四项数据装进浏览器的扩展消息。</p>
+      <div class="translation-block">
+        <div class="translation-code"><pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code><span class="code-keyword">const</span> session = new ReadingSession({
+  lookup: (id, reading, preload) =&gt; send&lt;Reply&gt;({ type: 'lookup', id, reading, preload }),
+  cancel: id =&gt; { <span class="code-keyword">void</span> send({ type: 'cancel', id }).catch(() =&gt; undefined); },</code></pre></div>
+        <div class="translation-english"><strong>这段代码做了什么</strong>
+          <div class="translation-lines">
+            <p class="tl">lookup 表示「查词」。id 给这次查询编号，reading 装选词、原句和位置，preload 标记是否提前查询。</p>
+            <p class="tl">直接查词时 preload 为 false。浏览器把这条消息转交给扩展后台；原词的屏幕坐标留在网页。</p>
+          </div>
+        </div>
+      </div>
+      <small>查看对应源码 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/main.ts#L7" target="_blank" rel="noopener">src/content/main.ts:7</a>
+      </small>
+      <div class="quiz-container" id="q2">
+        <div class="quiz-question-block" data-correct="0" data-explanation-right="文字锚点保存在网页。窗口变化时网页重新测量原词，再调整下划线和卡片的位置。" data-explanation-wrong="文字锚点保存在网页。窗口变化时网页重新测量原词，再调整下划线和卡片的位置。">
+          <h4>把窗口拖窄后，pitch 移到了下一行。同一次查询怎样让卡片跟过去？</h4>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="0" onclick="selectOption(this)"><span class="quiz-option-radio"></span>网页重新测量锚点的位置</button>
+            <button class="quiz-option" data-value="1" onclick="selectOption(this)"><span class="quiz-option-radio"></span>让模型返回新的屏幕坐标</button>
+            <button class="quiz-option" data-value="2" onclick="selectOption(this)"><span class="quiz-option-radio"></span>把整页截图重新发给后台</button>
+          </div>
+          <p class="quiz-feedback" aria-live="polite">
+          </p>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('q2')">核对答案</button>
+
+        <button class="quiz-reset-btn" onclick="resetQuiz('q2')">再试一次</button>
+      </div>
+    </div>
+  </div>
+</section>

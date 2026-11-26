@@ -1,0 +1,89 @@
+<section lang="zh-CN" class="module" id="module-4">
+  <div class="module-content">
+    <header class="module-header">
+      <h2 class="module-title">解释怎样回到刚才的 pitch？</h2>
+      <p class="module-subtitle">模型交回的是文字。把这段文字放进正确的卡片，还需要后台验收、网页认领。</p>
+    </header>
+    <div class="screen">
+      <h3 class="screen-heading">从一段段文字到两行释义</h3>
+      <p><button type="button" class="term" style="font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dotted currentColor;cursor:help" data-definition="模型陆续送回小段输出。后台可以在整份回答结束前先处理已经完整的字段。">流式响应</button>像陆续收到一封信的几页。后台把片段接起来，先检查目标词是否确实覆盖你指的那一次，再挑出已经写完整的释义。</p>
+      <div class="pattern-cards">
+        <div class="pattern-card">
+          <h4>① 等待</h4>
+          <p>网页先显示 pitch 和「正在读取语境…」。后台目前可能还在等模型的第一段文字。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>② 预览</h4>
+          <p>目标正确，完整的英文字段通过检查后，后台可先送回英文。中文字段完整并通过检查后再补上；两行也可能一起到达。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>③ 完成</h4>
+          <p>收到完成事件，后台重新校验整份结果，尝试写缓存，再交回最终答复。如果有英文补充，卡片会显示 More。</p>
+        </div>
+      </div>
+      <small>查看预览和最终校验 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/background/api.ts#L98" target="_blank" rel="noopener">src/background/api.ts:98</a> · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/background/api.ts#L71" target="_blank" rel="noopener">src/background/api.ts:71</a>
+      </small>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">哪张卡片可以收这条预览？</h3>
+      <p>后台给预览附上原来的查询编号，发回发起查询的网页文档。网页脚本按编号找到词的标记，把新内容交给当前展开的卡片。</p>
+      <div class="translation-block">
+        <div class="translation-code"><pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>preview(id: string, result: ExplanationPreview) {
+  <span class="code-keyword">const</span> mark = this.marks.get(id);
+  <span class="code-keyword">if</span> (!mark || mark.reply) <span class="code-keyword">return</span>;
+  mark.preview = result;
+  <span class="code-keyword">if</span> (this.opened?.mark === mark) this.opened.card.showMeanings(result);
+}</code></pre></div>
+        <div class="translation-english"><strong>这段代码做了什么</strong>
+          <div class="translation-lines">
+            <p class="tl">先按 id 找标记。如果标记已清除，或最终答复已到，直接结束。</p>
+            <p class="tl">其余预览先存到对应标记。只有当前打开的正是这个标记，才立刻更新卡片上的文字。</p>
+          </div>
+        </div>
+      </div>
+      <small>查看对应源码 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/reader.ts#L98" target="_blank" rel="noopener">src/content/reader.ts:98</a>
+      </small>
+      <aside class="callout callout-accent">
+        <div class="callout-content">
+          <p>后台若返回原文中的一个短语，例如你指的词属于习语，卡片标题也可以扩展。短语必须是连续原文，还要覆盖你指的那一次出现。</p>
+        </div>
+      </aside>
+      <small>查看卡片如何填入两行文字 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/card.ts#L119" target="_blank" rel="noopener">src/content/card.ts:119</a>
+      </small>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">用界面现象找到交接停在哪里</h3>
+      <div class="pattern-cards">
+        <div class="pattern-card">
+          <h4>连下划线都没出现</h4>
+          <p>先检查网页是否启用、指针是否落在正文字母上，以及左 Ctrl 是否单独轻按后松开。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>卡片提示设置密钥</h4>
+          <p>手势识别、定位和开卡已经完成。后台读取设置时发现缺少密钥，卡片会提供设置入口。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>先见英文，随后提示出错</h4>
+          <p>一条预览已送达，完整回答仍可能中断或校验失败。卡片改为错误提示，网络或格式错误可点「再试一次」。</p>
+        </div>
+      </div>
+      <div class="quiz-container" id="q4">
+        <div class="quiz-question-block" data-correct="1" data-explanation-right="关闭直接查词卡会移除临时标记，并在查询尚未结束时通知后台取消。迟到的预览按旧编号寻找标记，无法写进新卡片。" data-explanation-wrong="关闭直接查词卡会移除临时标记，并在查询尚未结束时通知后台取消。迟到的预览按旧编号寻找标记，无法写进新卡片。">
+          <h4>正在查 pitch 时，你按 Esc 关闭这张直接查词卡，马上又查另一个词。迟到的 pitch 预览会怎样？</h4>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="0" onclick="selectOption(this)"><span class="quiz-option-radio"></span>填入目前打开的新卡片</button>
+            <button class="quiz-option" data-value="1" onclick="selectOption(this)"><span class="quiz-option-radio"></span>网页找不到原来的标记，丢弃这条预览</button>
+          </div>
+          <p class="quiz-feedback" aria-live="polite">
+          </p>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('q4')">核对答案</button>
+
+        <button class="quiz-reset-btn" onclick="resetQuiz('q4')">再试一次</button>
+      </div>
+      <p>回看整条路：浏览器给坐标和松键信号，网页给后台带位置的原文，后台按需向模型提问，最后由网页把经过校验的解释放回原词旁。</p>
+      <small>依据 Context Edge 源码版本 41170cc · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/main.ts#L1" target="_blank" rel="noopener">src/content/main.ts:1</a> · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/background/worker.ts#L53" target="_blank" rel="noopener">src/background/worker.ts:53</a>
+      </small>
+    </div>
+  </div>
+</section>

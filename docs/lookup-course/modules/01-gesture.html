@@ -1,0 +1,81 @@
+<section lang="zh-CN" class="module" id="module-1">
+  <div class="module-content">
+    <header class="module-header">
+      <h1 class="module-title">指着 pitch，谁把释义送到你眼前？</h1>
+      <p class="module-subtitle">你在读一段融资对话。把鼠标移到 pitch 上，轻按并松开左 Ctrl，原词旁就会打开一张双语卡片。</p>
+    </header>
+    <div class="screen">
+      <h3 class="screen-heading">第一次查 pitch，消息怎么走？</h3>
+      <figure style="margin:0 0 1rem;padding:1.4rem 1.6rem;border-left:4px solid var(--color-accent);background:var(--color-surface-warm)">
+        <blockquote lang="en" style="font:500 clamp(1.5rem,4vw,2.5rem)/1.28 Georgia,serif">My <u style="text-decoration-color:#a15641;text-underline-offset:.17em">pitch</u> isn’t working on the fundraising side.</blockquote>
+        <figcaption style="margin-top:1rem">这里的 pitch 是向潜在投资人推介项目时用的说辞。</figcaption>
+      </figure>
+      <p>点图中的「下一步」，看浏览器、<button type="button" class="term" style="font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dotted currentColor;cursor:help" data-definition="扩展放进当前网页的一段程序。它能读取指针下的文字，也能画线和显示卡片。">网页脚本</button>、扩展后台和模型怎样接力。图中使用固定例句模拟过程。</p>
+      <div class="flow-animation" data-steps="[{&quot;from&quot;:&quot;edge&quot;,&quot;to&quot;:&quot;reader&quot;,&quot;highlight&quot;:&quot;reader&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;移动鼠标 → 网页脚本收到坐标 (x, y)，记下指针落点。&quot;},{&quot;from&quot;:&quot;edge&quot;,&quot;to&quot;:&quot;reader&quot;,&quot;highlight&quot;:&quot;reader&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;单独轻按并松开左 Ctrl → 网页脚本确认手势，用刚才的坐标找出 pitch 和原句。&quot;},{&quot;from&quot;:&quot;reader&quot;,&quot;to&quot;:&quot;worker&quot;,&quot;highlight&quot;:&quot;worker&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;网页脚本先画线、打开等待卡，再把查询编号和语境交给后台。&quot;},{&quot;from&quot;:&quot;worker&quot;,&quot;to&quot;:&quot;ai&quot;,&quot;highlight&quot;:&quot;ai&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;本次没有缓存 → 后台带上密钥，向模型发送选词、句内位置和一小段原文。&quot;},{&quot;from&quot;:&quot;ai&quot;,&quot;to&quot;:&quot;worker&quot;,&quot;highlight&quot;:&quot;worker&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;模型逐段生成 → 后台拼接回答，检查目标词是否覆盖原文中的这一次 pitch。&quot;},{&quot;from&quot;:&quot;worker&quot;,&quot;to&quot;:&quot;reader&quot;,&quot;highlight&quot;:&quot;reader&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;后台把通过检查的预览发回网页 → 网页按编号找到原来的卡片，显示已有释义。&quot;},{&quot;from&quot;:&quot;worker&quot;,&quot;to&quot;:&quot;reader&quot;,&quot;highlight&quot;:&quot;reader&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;完整回答通过检查 → 后台尝试存入缓存，返回最终结果；网页补齐卡片。&quot;}]">
+        <div class="flow-actors">
+          <div class="flow-actor" id="flow-edge">
+            <div class="flow-actor-icon" aria-hidden="true">↖</div><span>浏览器</span>
+          </div>
+          <div class="flow-actor" id="flow-reader">
+            <div class="flow-actor-icon" aria-hidden="true">词</div><span>网页脚本</span>
+          </div>
+          <div class="flow-actor" id="flow-worker">
+            <div class="flow-actor-icon" aria-hidden="true">⚙</div><span>扩展后台</span>
+          </div>
+          <div class="flow-actor" id="flow-ai">
+            <div class="flow-actor-icon" aria-hidden="true">AI</div><span>模型服务</span>
+          </div>
+        </div>
+        <div class="flow-packet">
+        </div>
+        <div class="flow-step-label" aria-live="polite">从鼠标停在 pitch 上开始。点「下一步」跟着这次查询走。</div>
+        <div class="flow-controls">
+          <button class="btn btn-primary flow-next-btn">下一步</button>
+          <button class="btn flow-reset-btn">重播</button>
+          <span class="flow-progress"></span>
+        </div>
+      </div>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">鼠标给位置，松键给信号</h3>
+      <p>移动鼠标像把手指放在书页的一行上。浏览器把屏幕上的横、纵坐标交给网页脚本。你停留多久都可以，单纯悬停不会发起查词。</p>
+      <div class="translation-block">
+        <div class="translation-code"><pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>window.addEventListener('keyup', e =&gt; {
+  <span class="code-keyword">if</span> (!e.isTrusted || !this.tap.up(e.code, performance.now()) || !this.enabled || !this.point || this.buttons || this.editing(e)) <span class="code-keyword">return</span>;
+  <span class="code-keyword">const</span> anchor = pointedWord(this.point);
+  <span class="code-keyword">if</span> (anchor) this.lookup(anchor, false);</code></pre></div>
+        <div class="translation-english"><strong>这段代码做了什么</strong>
+          <div class="translation-lines">
+            <p class="tl">浏览器报告松键。网页脚本检查手势、阅读开关、鼠标位置和编辑状态。</p>
+            <p class="tl">条件通过，才把坐标交给 pointedWord。找到原词就立即查，false 表示直接打开卡片。</p>
+          </div>
+        </div>
+      </div>
+      <small>查看对应源码 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/reader.ts#L252" target="_blank" rel="noopener">src/content/reader.ts:252</a>
+      </small>
+      <aside class="callout callout-accent">
+        <div class="callout-content">
+          <p>半秒是左 Ctrl 从按下到松开的时长上限。组合键、滚轮操作或在输入框里编辑都会打断这条直接查词路径。手势判定见 <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/gesture.ts#L1" target="_blank" rel="noopener">src/content/gesture.ts:1</a>。</p>
+        </div>
+      </aside>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">试着预测一次操作</h3>
+      <div class="quiz-container" id="q1">
+        <div class="quiz-question-block" data-correct="2" data-explanation-right="停留时长无关。松键时检查这次按键是否在 500 毫秒以内，再用已记录的位置找词。" data-explanation-wrong="停留时长无关。松键时检查这次按键是否在 500 毫秒以内，再用已记录的位置找词。">
+          <h4>指针在 pitch 上停了两秒，随后单独按住左 Ctrl 约 0.2 秒再松开。什么时候开始找词？</h4>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="0" onclick="selectOption(this)"><span class="quiz-option-radio"></span>停满半秒时</button>
+            <button class="quiz-option" data-value="1" onclick="selectOption(this)"><span class="quiz-option-radio"></span>按下左 Ctrl 时</button>
+            <button class="quiz-option" data-value="2" onclick="selectOption(this)"><span class="quiz-option-radio"></span>松开左 Ctrl 时</button>
+          </div>
+          <p class="quiz-feedback" aria-live="polite">
+          </p>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('q1')">核对答案</button>
+
+        <button class="quiz-reset-btn" onclick="resetQuiz('q1')">再试一次</button>
+      </div>
+    </div>
+  </div>
+</section>

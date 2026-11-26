@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Context Edge · 一次查词的旅程</title>
+
+  <!-- Google Fonts: Bricolage Grotesque · DM Sans · JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+
+  <!--
+    CUSTOMIZE PER COURSE — change only the three accent variables below.
+    Options:
+      vermillion  #D94F30 / #C4432A / #FDEEE9 / #E8836C  (default)
+      coral       #E06B56 / #C85A47 / #FDECEA / #E89585
+      teal        #2A7B9B / #1F6280 / #E4F2F7 / #5A9DB8
+      amber       #D4A843 / #BF9530 / #FDF5E0 / #E0C070
+      forest      #2D8B55 / #226B41 / #E8F5EE / #5AAD7A
+  -->
+  <style>
+    :root {
+      --color-accent:       #D94F30;
+      --color-accent-hover: #C4432A;
+      --color-accent-light: #FDEEE9;
+      --color-accent-muted: #E8836C;
+    }
+    .module { min-height: 100dvh; }
+    .module:nth-child(even) { background-color: var(--color-bg-warm); }
+    .flow-controls, .chat-controls { flex-wrap: wrap; }
+    .module-header { max-width: 52rem; }
+    @media (max-width: 480px) {
+      .module { padding-top: calc(var(--nav-height) + 2rem); }
+    }
+  </style>
+
+  <script src="main.js" defer></script>
+</head>
+<body>
+
+  <nav class="nav" id="nav">
+    <div class="progress-bar" id="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    <div class="nav-inner">
+      <span class="nav-title">Context Edge · 一次查词的旅程</span>
+      <div class="nav-dots" id="nav-dots" role="tablist">
+        <!--
+          One <button> per module. Replace MODULE_N_NAME with the actual module title.
+
+          <button class="nav-dot" data-target="module-1" data-tooltip="MODULE_1_NAME" role="tab" aria-label="Module 1: MODULE_1_NAME"></button>
+          <button class="nav-dot" data-target="module-2" data-tooltip="MODULE_2_NAME" role="tab" aria-label="Module 2: MODULE_2_NAME"></button>
+          ...
+        -->
+        <button class="nav-dot" data-target="module-1" data-tooltip="鼠标和左 Ctrl" role="tab" aria-label="第 1 节 鼠标和左 Ctrl"></button>
+<button class="nav-dot" data-target="module-2" data-tooltip="给单词装上语境" role="tab" aria-label="第 2 节 给单词装上语境"></button>
+<button class="nav-dot" data-target="module-3" data-tooltip="后台怎样决定是否联网" role="tab" aria-label="第 3 节 后台怎样决定是否联网"></button>
+<button class="nav-dot" data-target="module-4" data-tooltip="解释怎样回到原词" role="tab" aria-label="第 4 节 解释怎样回到原词"></button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- modules/*.html content is assembled here by build.sh -->
+<section lang="zh-CN" class="module" id="module-1">
+  <div class="module-content">
+    <header class="module-header">
+      <h1 class="module-title">指着 pitch，谁把释义送到你眼前？</h1>
+      <p class="module-subtitle">你在读一段融资对话。把鼠标移到 pitch 上，轻按并松开左 Ctrl，原词旁就会打开一张双语卡片。</p>
+    </header>
+    <div class="screen">
+      <h3 class="screen-heading">第一次查 pitch，消息怎么走？</h3>
+      <figure style="margin:0 0 1rem;padding:1.4rem 1.6rem;border-left:4px solid var(--color-accent);background:var(--color-surface-warm)">
+        <blockquote lang="en" style="font:500 clamp(1.5rem,4vw,2.5rem)/1.28 Georgia,serif">My <u style="text-decoration-color:#a15641;text-underline-offset:.17em">pitch</u> isn’t working on the fundraising side.</blockquote>
+        <figcaption style="margin-top:1rem">这里的 pitch 是向潜在投资人推介项目时用的说辞。</figcaption>
+      </figure>
+      <p>点图中的「下一步」，看浏览器、<button type="button" class="term" style="font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dotted currentColor;cursor:help" data-definition="扩展放进当前网页的一段程序。它能读取指针下的文字，也能画线和显示卡片。">网页脚本</button>、扩展后台和模型怎样接力。图中使用固定例句模拟过程。</p>
+      <div class="flow-animation" data-steps="[{&quot;from&quot;:&quot;edge&quot;,&quot;to&quot;:&quot;reader&quot;,&quot;highlight&quot;:&quot;reader&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;移动鼠标 → 网页脚本收到坐标 (x, y)，记下指针落点。&quot;},{&quot;from&quot;:&quot;edge&quot;,&quot;to&quot;:&quot;reader&quot;,&quot;highlight&quot;:&quot;reader&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;单独轻按并松开左 Ctrl → 网页脚本确认手势，用刚才的坐标找出 pitch 和原句。&quot;},{&quot;from&quot;:&quot;reader&quot;,&quot;to&quot;:&quot;worker&quot;,&quot;highlight&quot;:&quot;worker&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;网页脚本先画线、打开等待卡，再把查询编号和语境交给后台。&quot;},{&quot;from&quot;:&quot;worker&quot;,&quot;to&quot;:&quot;ai&quot;,&quot;highlight&quot;:&quot;ai&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;本次没有缓存 → 后台带上密钥，向模型发送选词、句内位置和一小段原文。&quot;},{&quot;from&quot;:&quot;ai&quot;,&quot;to&quot;:&quot;worker&quot;,&quot;highlight&quot;:&quot;worker&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;模型逐段生成 → 后台拼接回答，检查目标词是否覆盖原文中的这一次 pitch。&quot;},{&quot;from&quot;:&quot;worker&quot;,&quot;to&quot;:&quot;reader&quot;,&quot;highlight&quot;:&quot;reader&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;后台把通过检查的预览发回网页 → 网页按编号找到原来的卡片，显示已有释义。&quot;},{&quot;from&quot;:&quot;worker&quot;,&quot;to&quot;:&quot;reader&quot;,&quot;highlight&quot;:&quot;reader&quot;,&quot;packet&quot;:true,&quot;label&quot;:&quot;完整回答通过检查 → 后台尝试存入缓存，返回最终结果；网页补齐卡片。&quot;}]">
+        <div class="flow-actors">
+          <div class="flow-actor" id="flow-edge">
+            <div class="flow-actor-icon" aria-hidden="true">↖</div><span>浏览器</span>
+          </div>
+          <div class="flow-actor" id="flow-reader">
+            <div class="flow-actor-icon" aria-hidden="true">词</div><span>网页脚本</span>
+          </div>
+          <div class="flow-actor" id="flow-worker">
+            <div class="flow-actor-icon" aria-hidden="true">⚙</div><span>扩展后台</span>
+          </div>
+          <div class="flow-actor" id="flow-ai">
+            <div class="flow-actor-icon" aria-hidden="true">AI</div><span>模型服务</span>
+          </div>
+        </div>
+        <div class="flow-packet">
+        </div>
+        <div class="flow-step-label" aria-live="polite">从鼠标停在 pitch 上开始。点「下一步」跟着这次查询走。</div>
+        <div class="flow-controls">
+          <button class="btn btn-primary flow-next-btn">下一步</button>
+          <button class="btn flow-reset-btn">重播</button>
+          <span class="flow-progress"></span>
+        </div>
+      </div>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">鼠标给位置，松键给信号</h3>
+      <p>移动鼠标像把手指放在书页的一行上。浏览器把屏幕上的横、纵坐标交给网页脚本。你停留多久都可以，单纯悬停不会发起查词。</p>
+      <div class="translation-block">
+        <div class="translation-code"><pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>window.addEventListener('keyup', e =&gt; {
+  <span class="code-keyword">if</span> (!e.isTrusted || !this.tap.up(e.code, performance.now()) || !this.enabled || !this.point || this.buttons || this.editing(e)) <span class="code-keyword">return</span>;
+  <span class="code-keyword">const</span> anchor = pointedWord(this.point);
+  <span class="code-keyword">if</span> (anchor) this.lookup(anchor, false);</code></pre></div>
+        <div class="translation-english"><strong>这段代码做了什么</strong>
+          <div class="translation-lines">
+            <p class="tl">浏览器报告松键。网页脚本检查手势、阅读开关、鼠标位置和编辑状态。</p>
+            <p class="tl">条件通过，才把坐标交给 pointedWord。找到原词就立即查，false 表示直接打开卡片。</p>
+          </div>
+        </div>
+      </div>
+      <small>查看对应源码 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/reader.ts#L252" target="_blank" rel="noopener">src/content/reader.ts:252</a>
+      </small>
+      <aside class="callout callout-accent">
+        <div class="callout-content">
+          <p>半秒是左 Ctrl 从按下到松开的时长上限。组合键、滚轮操作或在输入框里编辑都会打断这条直接查词路径。手势判定见 <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/gesture.ts#L1" target="_blank" rel="noopener">src/content/gesture.ts:1</a>。</p>
+        </div>
+      </aside>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">试着预测一次操作</h3>
+      <div class="quiz-container" id="q1">
+        <div class="quiz-question-block" data-correct="2" data-explanation-right="停留时长无关。松键时检查这次按键是否在 500 毫秒以内，再用已记录的位置找词。" data-explanation-wrong="停留时长无关。松键时检查这次按键是否在 500 毫秒以内，再用已记录的位置找词。">
+          <h4>指针在 pitch 上停了两秒，随后单独按住左 Ctrl 约 0.2 秒再松开。什么时候开始找词？</h4>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="0" onclick="selectOption(this)"><span class="quiz-option-radio"></span>停满半秒时</button>
+            <button class="quiz-option" data-value="1" onclick="selectOption(this)"><span class="quiz-option-radio"></span>按下左 Ctrl 时</button>
+            <button class="quiz-option" data-value="2" onclick="selectOption(this)"><span class="quiz-option-radio"></span>松开左 Ctrl 时</button>
+          </div>
+          <p class="quiz-feedback" aria-live="polite">
+          </p>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('q1')">核对答案</button>
+
+        <button class="quiz-reset-btn" onclick="resetQuiz('q1')">再试一次</button>
+      </div>
+    </div>
+  </div>
+</section>
+<section lang="zh-CN" class="module" id="module-2">
+  <div class="module-content">
+    <header class="module-header">
+      <h2 class="module-title">交给后台的是哪一段文字？</h2>
+      <p class="module-subtitle">后台收到 pitch 时，还需要知道它出现在哪一句、哪一个位置。网页则要记住，稍后在哪个词旁边画卡片。</p>
+    </header>
+    <div class="screen">
+      <h3 class="screen-heading">先找到字母，再划出整词</h3>
+      <div class="pattern-cards">
+        <div class="pattern-card">
+          <h4>落在哪个字上</h4>
+          <p>浏览器给出坐标附近的文字位置。pointedWord 检查字形的小方框是否包含指针，指到行尾空白就停下。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>属于哪段原文</h4>
+          <p>网页脚本拼接同一正文块里的可见文字，判断是否为英文。普通文章取当前段落，X 只取当前帖子的正文。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>这个词有多长</h4>
+          <p>浏览器的分词工具划出整个 pitch，再找出包含它的句子。标题、当前句和邻近文字合计最多 1,200 个 UTF-16 代码单元，即程序计算文本长度的单位。</p>
+        </div>
+      </div>
+      <small>查看定位与切句 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/dom.ts#L163" target="_blank" rel="noopener">src/content/dom.ts:163</a> · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/text.ts#L36" target="_blank" rel="noopener">src/content/text.ts:36</a>
+      </small>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">同一个词，留下两份不同的信息</h3>
+      <p>把<button type="button" class="term" style="font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dotted currentColor;cursor:help" data-definition="Anchor 是网页端保存的定位信息，包含原词的文字范围和语境。">锚点</button>想成贴在原文上的标签。打开下面三个视图，分别看读者读到什么、页面留下什么、后台收到什么。</p>
+      <div class="layer-demo">
+        <div class="layer-tabs">
+          <button class="layer-tab active" onclick="showLayer('reading-0',this)">阅读原文</button>
+          <button class="layer-tab " onclick="showLayer('reading-1',this)">留在网页</button>
+          <button class="layer-tab " onclick="showLayer('reading-2',this)">交给后台</button>
+        </div>
+        <div class="layer-viewport">
+          <div class="layer" id="reading-0" style="display:block">
+            <p lang="en">My <mark>pitch</mark> isn't working on the fundraising side.</p>
+            <p>普通网页的示例标题是 Founder notes。这里假设段落里只有这一句。</p>
+          </div>
+          <div class="layer" id="reading-1" style="display:none">
+            <p><strong>Anchor · 原词在网页中的位置</strong>
+            </p>
+            <p>网页脚本留下文字范围、所在段落和重新测量位置的方法。即使页面滚动，仍能找到该把线画在哪里。</p>
+          </div>
+          <div class="layer" id="reading-2" style="display:none">
+            <p><strong>Reading · 文字与句内位置</strong>
+            </p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">selected = "pitch"
+sentence = "My pitch isn't working on the fundraising side."
+start = 3     end = 8
+before = ""   after = ""
+title = "Founder notes"</pre></div>
+        </div>
+      </div>
+      <aside class="callout callout-accent">
+        <div class="callout-content">
+          <p>start 从 0 数，end 指向最后一个字母之后的位置。这里取原句第 3 到第 8 位之前，正好是 pitch。同一句里即使有两个 pitch，也可以区分你指的那一个。</p>
+        </div>
+      </aside>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">从定位切换到查词</h3>
+      <p>网页为新查询分配编号，创建蜡笔下划线，并显示「正在读取语境…」。随后内容脚本把四项数据装进浏览器的扩展消息。</p>
+      <div class="translation-block">
+        <div class="translation-code"><pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code><span class="code-keyword">const</span> session = new ReadingSession({
+  lookup: (id, reading, preload) =&gt; send&lt;Reply&gt;({ type: 'lookup', id, reading, preload }),
+  cancel: id =&gt; { <span class="code-keyword">void</span> send({ type: 'cancel', id }).catch(() =&gt; undefined); },</code></pre></div>
+        <div class="translation-english"><strong>这段代码做了什么</strong>
+          <div class="translation-lines">
+            <p class="tl">lookup 表示「查词」。id 给这次查询编号，reading 装选词、原句和位置，preload 标记是否提前查询。</p>
+            <p class="tl">直接查词时 preload 为 false。浏览器把这条消息转交给扩展后台；原词的屏幕坐标留在网页。</p>
+          </div>
+        </div>
+      </div>
+      <small>查看对应源码 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/main.ts#L7" target="_blank" rel="noopener">src/content/main.ts:7</a>
+      </small>
+      <div class="quiz-container" id="q2">
+        <div class="quiz-question-block" data-correct="0" data-explanation-right="文字锚点保存在网页。窗口变化时网页重新测量原词，再调整下划线和卡片的位置。" data-explanation-wrong="文字锚点保存在网页。窗口变化时网页重新测量原词，再调整下划线和卡片的位置。">
+          <h4>把窗口拖窄后，pitch 移到了下一行。同一次查询怎样让卡片跟过去？</h4>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="0" onclick="selectOption(this)"><span class="quiz-option-radio"></span>网页重新测量锚点的位置</button>
+            <button class="quiz-option" data-value="1" onclick="selectOption(this)"><span class="quiz-option-radio"></span>让模型返回新的屏幕坐标</button>
+            <button class="quiz-option" data-value="2" onclick="selectOption(this)"><span class="quiz-option-radio"></span>把整页截图重新发给后台</button>
+          </div>
+          <p class="quiz-feedback" aria-live="polite">
+          </p>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('q2')">核对答案</button>
+
+        <button class="quiz-reset-btn" onclick="resetQuiz('q2')">再试一次</button>
+      </div>
+    </div>
+  </div>
+</section>
+<section lang="zh-CN" class="module" id="module-3">
+  <div class="module-content">
+    <header class="module-header">
+      <h2 class="module-title">这一次，需要问 AI 吗？</h2>
+      <p class="module-subtitle">从这一步起，网页把查词交给扩展后台。后台决定能否查、手头是否已有答案，以及是否需要联网。</p>
+    </header>
+    <div class="screen">
+      <h3 class="screen-heading">哪些检查发生在浏览器里？</h3>
+      <p><button type="button" class="term" style="font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dotted currentColor;cursor:help" data-definition="运行在扩展内部的程序。网页通过消息向它提问，它负责设置、缓存和网络访问。">后台</button>先核实消息来自自己的扩展、顶层网页且数据有效，再检查是否允许查词。<button type="button" class="term" style="font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dotted currentColor;cursor:help" data-definition="用户保存在扩展设置中的访问密钥，用于向模型服务验证身份。">API Key</button>由后台从受限的扩展存储读取。</p>
+      <div class="chat-window" id="dispatch">
+        <div class="chat-messages" aria-live="polite">
+          <p>模拟一次没有缓存记录的查词。点「播放对话」查看交接。</p>
+          <div class="chat-message" style="display:none" data-sender="网页脚本">
+            <div class="chat-avatar" style="background:var(--color-actor-1)">页</div>
+            <div class="chat-bubble"><span class="chat-sender">网页脚本</span>
+              <p>请查 pitch。这是本次查询的编号、原句和句内位置。这次要直接打开卡片。</p>
+            </div>
+          </div>
+          <div class="chat-message" style="display:none" data-sender="扩展后台">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">后</div>
+            <div class="chat-bubble"><span class="chat-sender">扩展后台</span>
+              <p>来源是本扩展的主文档，语境格式通过检查。我再核对网站开关、本地密钥和模型设置。</p>
+            </div>
+          </div>
+          <div class="chat-message" style="display:none" data-sender="本地缓存">
+            <div class="chat-avatar" style="background:var(--color-actor-3)">存</div>
+            <div class="chat-bubble"><span class="chat-sender">本地缓存</span>
+              <p>用选词、位置、语境、标题、模型、提示词版本和输出语言找了一遍。这个组合还没有记录。</p>
+            </div>
+          </div>
+          <div class="chat-message" style="display:none" data-sender="扩展后台">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">后</div>
+            <div class="chat-bubble"><span class="chat-sender">扩展后台</span>
+              <p>我把这段阅读材料、解释规则和输出格式发给 OpenAI。请求头里带上密钥。</p>
+            </div>
+          </div>
+          <div class="chat-message" style="display:none" data-sender="模型服务">
+            <div class="chat-avatar" style="background:var(--color-actor-5)">AI</div>
+            <div class="chat-bubble"><span class="chat-sender">模型服务</span>
+              <p>fundraising 提供了线索。我会用英文和中文解释这里的 pitch，并按要求的字段返回。</p>
+            </div>
+          </div>
+        </div>
+        <div class="chat-typing" style="display:none">
+          <div class="chat-avatar">
+          </div><span>正在输入…</span>
+        </div>
+        <div class="chat-controls">
+          <button class="chat-all-btn btn btn-primary" onclick="this.disabled=true;this.nextElementSibling.disabled=true;setTimeout(()=>this.nextElementSibling.disabled=false,7400)">播放对话</button>
+          <button disabled class="chat-reset-btn btn" onclick="this.previousElementSibling.disabled=false;this.disabled=true">重新开始</button>
+        </div>
+      </div>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">同一个拼写，为什么还要查两次？</h3>
+      <p><button type="button" class="term" style="font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dotted currentColor;cursor:help" data-definition="把已经取得的完整答案存在本机，下次条件相同时直接复用。">缓存</button>像按整条例句做索引的摘录本。融资文章和棒球报道都写 pitch，两条记录会有不同的索引。</p>
+      <div class="translation-block">
+        <div class="translation-code"><pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code><span class="code-keyword">const</span> key = <span class="code-keyword">await</span> cacheKey(reading, model);
+<span class="code-keyword">const</span> cached = <span class="code-keyword">await</span> cache.get(key).catch(() =&gt; undefined);
+<span class="code-keyword">if</span> (signal.aborted) throw new LookupFailure('cancelled');
+<span class="code-keyword">if</span> (cached) <span class="code-keyword">return</span> { ok: true, explanation: cached };</code></pre></div>
+        <div class="translation-english"><strong>这段代码做了什么</strong>
+          <div class="translation-lines">
+            <p class="tl">第一行把选词、位置、语境和模型等信息算成一个索引。后台按它读取已有答案。</p>
+            <p class="tl">若请求已取消就停止；命中缓存则直接交回完整解释。只有继续往下走才调用模型。</p>
+          </div>
+        </div>
+      </div>
+      <small>查看对应源码 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/background/worker.ts#L66" target="_blank" rel="noopener">src/background/worker.ts:66</a>
+      </small>
+      <aside class="callout callout-accent">
+        <div class="callout-content">
+          <p>缓存最多 300 条，每条从保存起有效 7 天。还有一种更近的复用：点回同一页已双击标记的词，会直接打开那个标记已有的结果或进度。</p>
+        </div>
+      </aside>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">没有缓存时，模型看到了什么？</h3>
+      <div class="pattern-cards">
+        <div class="pattern-card">
+          <h4>发送的阅读材料</h4>
+          <p>选词 pitch、当前句、句内起止位置、前后文和页面标题。X 帖子的标题字段留空。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>后台给的任务</h4>
+          <p>用扩展内置规则和示例引导模型按语境解释，返回状态、目标词、英文解释、中文释义和可选的英文补充。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>发往哪里</h4>
+          <p>后台向 OpenAI Responses 接口提交请求，要求分段返回，并设置 store: false。模型生成解释，绘制卡片由网页负责。</p>
+        </div>
+      </div>
+      <small>查看请求字段与解释规则 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/background/api.ts#L35" target="_blank" rel="noopener">src/background/api.ts:35</a> · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/background/api.ts#L164" target="_blank" rel="noopener">src/background/api.ts:164</a> · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/background/instructions.txt#L8" target="_blank" rel="noopener">src/background/instructions.txt:8</a>
+      </small>
+      <div class="quiz-container" id="q3">
+        <div class="quiz-question-block" data-correct="1" data-explanation-right="索引同时包括当前句和相邻语境。相同的拼写可以在两篇文章里有不同含义。" data-explanation-wrong="索引同时包括当前句和相邻语境。相同的拼写可以在两篇文章里有不同含义。">
+          <h4>昨天在融资文章里查过 pitch，今天在棒球报道中指向同一个词。后台会怎样处理？</h4>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="0" onclick="selectOption(this)"><span class="quiz-option-radio"></span>只比较 pitch 的拼写就交回昨天的答案</button>
+            <button class="quiz-option" data-value="1" onclick="selectOption(this)"><span class="quiz-option-radio"></span>用今天的语境重新找缓存，没找到再请求模型</button>
+          </div>
+          <p class="quiz-feedback" aria-live="polite">
+          </p>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('q3')">核对答案</button>
+
+        <button class="quiz-reset-btn" onclick="resetQuiz('q3')">再试一次</button>
+      </div>
+    </div>
+  </div>
+</section>
+<section lang="zh-CN" class="module" id="module-4">
+  <div class="module-content">
+    <header class="module-header">
+      <h2 class="module-title">解释怎样回到刚才的 pitch？</h2>
+      <p class="module-subtitle">模型交回的是文字。把这段文字放进正确的卡片，还需要后台验收、网页认领。</p>
+    </header>
+    <div class="screen">
+      <h3 class="screen-heading">从一段段文字到两行释义</h3>
+      <p><button type="button" class="term" style="font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dotted currentColor;cursor:help" data-definition="模型陆续送回小段输出。后台可以在整份回答结束前先处理已经完整的字段。">流式响应</button>像陆续收到一封信的几页。后台把片段接起来，先检查目标词是否确实覆盖你指的那一次，再挑出已经写完整的释义。</p>
+      <div class="pattern-cards">
+        <div class="pattern-card">
+          <h4>① 等待</h4>
+          <p>网页先显示 pitch 和「正在读取语境…」。后台目前可能还在等模型的第一段文字。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>② 预览</h4>
+          <p>目标正确，完整的英文字段通过检查后，后台可先送回英文。中文字段完整并通过检查后再补上；两行也可能一起到达。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>③ 完成</h4>
+          <p>收到完成事件，后台重新校验整份结果，尝试写缓存，再交回最终答复。如果有英文补充，卡片会显示 More。</p>
+        </div>
+      </div>
+      <small>查看预览和最终校验 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/background/api.ts#L98" target="_blank" rel="noopener">src/background/api.ts:98</a> · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/background/api.ts#L71" target="_blank" rel="noopener">src/background/api.ts:71</a>
+      </small>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">哪张卡片可以收这条预览？</h3>
+      <p>后台给预览附上原来的查询编号，发回发起查询的网页文档。网页脚本按编号找到词的标记，把新内容交给当前展开的卡片。</p>
+      <div class="translation-block">
+        <div class="translation-code"><pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>preview(id: string, result: ExplanationPreview) {
+  <span class="code-keyword">const</span> mark = this.marks.get(id);
+  <span class="code-keyword">if</span> (!mark || mark.reply) <span class="code-keyword">return</span>;
+  mark.preview = result;
+  <span class="code-keyword">if</span> (this.opened?.mark === mark) this.opened.card.showMeanings(result);
+}</code></pre></div>
+        <div class="translation-english"><strong>这段代码做了什么</strong>
+          <div class="translation-lines">
+            <p class="tl">先按 id 找标记。如果标记已清除，或最终答复已到，直接结束。</p>
+            <p class="tl">其余预览先存到对应标记。只有当前打开的正是这个标记，才立刻更新卡片上的文字。</p>
+          </div>
+        </div>
+      </div>
+      <small>查看对应源码 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/reader.ts#L98" target="_blank" rel="noopener">src/content/reader.ts:98</a>
+      </small>
+      <aside class="callout callout-accent">
+        <div class="callout-content">
+          <p>后台若返回原文中的一个短语，例如你指的词属于习语，卡片标题也可以扩展。短语必须是连续原文，还要覆盖你指的那一次出现。</p>
+        </div>
+      </aside>
+      <small>查看卡片如何填入两行文字 · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/card.ts#L119" target="_blank" rel="noopener">src/content/card.ts:119</a>
+      </small>
+    </div>
+    <div class="screen">
+      <h3 class="screen-heading">用界面现象找到交接停在哪里</h3>
+      <div class="pattern-cards">
+        <div class="pattern-card">
+          <h4>连下划线都没出现</h4>
+          <p>先检查网页是否启用、指针是否落在正文字母上，以及左 Ctrl 是否单独轻按后松开。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>卡片提示设置密钥</h4>
+          <p>手势识别、定位和开卡已经完成。后台读取设置时发现缺少密钥，卡片会提供设置入口。</p>
+        </div>
+        <div class="pattern-card">
+          <h4>先见英文，随后提示出错</h4>
+          <p>一条预览已送达，完整回答仍可能中断或校验失败。卡片改为错误提示，网络或格式错误可点「再试一次」。</p>
+        </div>
+      </div>
+      <div class="quiz-container" id="q4">
+        <div class="quiz-question-block" data-correct="1" data-explanation-right="关闭直接查词卡会移除临时标记，并在查询尚未结束时通知后台取消。迟到的预览按旧编号寻找标记，无法写进新卡片。" data-explanation-wrong="关闭直接查词卡会移除临时标记，并在查询尚未结束时通知后台取消。迟到的预览按旧编号寻找标记，无法写进新卡片。">
+          <h4>正在查 pitch 时，你按 Esc 关闭这张直接查词卡，马上又查另一个词。迟到的 pitch 预览会怎样？</h4>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="0" onclick="selectOption(this)"><span class="quiz-option-radio"></span>填入目前打开的新卡片</button>
+            <button class="quiz-option" data-value="1" onclick="selectOption(this)"><span class="quiz-option-radio"></span>网页找不到原来的标记，丢弃这条预览</button>
+          </div>
+          <p class="quiz-feedback" aria-live="polite">
+          </p>
+        </div>
+        <button class="quiz-check-btn" onclick="checkQuiz('q4')">核对答案</button>
+
+        <button class="quiz-reset-btn" onclick="resetQuiz('q4')">再试一次</button>
+      </div>
+      <p>回看整条路：浏览器给坐标和松键信号，网页给后台带位置的原文，后台按需向模型提问，最后由网页把经过校验的解释放回原词旁。</p>
+      <small>依据 Context Edge 源码版本 41170cc · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/content/main.ts#L1" target="_blank" rel="noopener">src/content/main.ts:1</a> · <a href="https://github.com/uitcxito/context-edge/blob/41170cc4b173bbc1e800840f9260c9d601127076/src/background/worker.ts#L53" target="_blank" rel="noopener">src/background/worker.ts:53</a>
+      </small>
+    </div>
+  </div>
+</section>
+  </main>
+
+</body>
+</html>
